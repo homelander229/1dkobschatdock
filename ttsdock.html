@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TTS Dock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0d0e14; --panel:#161822; --panel-2:#1e2130; --line:#2a2d3d;
+    --text:#eceef5; --text-dim:#9096ab;
+    --twitch:#9146ff; --ok:#42d477; --err:#e0473a; --warn:#e0b23a;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; font-size:13.5px; padding:16px; max-width:860px; margin:0 auto 60px; }
+  h1{font-family:'JetBrains Mono',monospace; font-size:20px; margin:4px 0 2px;} h1 span{color:var(--twitch);}
+  .sub{color:var(--text-dim); font-size:12.5px; margin:0 0 18px;}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:16px;}
+  .panel h2{font-size:12px; text-transform:uppercase; letter-spacing:1.2px; color:var(--text-dim); margin:0 0 12px; display:flex; align-items:center; gap:8px;}
+  .dot{width:8px;height:8px;border-radius:50%;background:#555;flex:none;}
+  .dot.ok{background:var(--ok); box-shadow:0 0 6px var(--ok);} .dot.err{background:var(--err);} .dot.wait{background:var(--warn);}
+  label{display:block; font-size:12px; color:var(--text-dim); margin:9px 0 4px;}
+  input[type=text],input[type=password],input[type=number],textarea,select{
+    width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:8px;
+    padding:7px 9px; color:var(--text); font-size:13px; font-family:'JetBrains Mono',monospace;
+  }
+  textarea{font-family:'Inter',sans-serif; resize:vertical;}
+  input[type=range]{width:100%;}
+  button{font-family:'Inter',sans-serif; font-weight:700; font-size:12px; border:none; border-radius:8px; padding:7px 12px; cursor:pointer; background:var(--panel-2); color:var(--text);}
+  button:hover{filter:brightness(1.15);}
+  button.primary{background:var(--twitch); color:white;}
+  button.ghost{background:transparent; border:1px solid var(--line);}
+  button.danger{background:var(--err); color:white;}
+  .btn-row{display:flex; gap:8px; margin-top:9px; flex-wrap:wrap;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;}
+  .status-line{font-size:11.5px; color:var(--text-dim); margin-top:7px; min-height:14px;}
+  .hint{font-size:11px; color:var(--text-dim); margin-top:5px; line-height:1.5;}
+  .copyfield{display:flex; gap:6px; align-items:center;}
+  .copyfield input{flex:1;}
+  .table-row{display:grid; grid-template-columns:1fr 1fr 70px 70px 34px; gap:6px; margin-bottom:6px; align-items:center;}
+  .table-row.reward-row, .table-row.user-row{grid-template-columns:1fr 1fr 34px;}
+  .table-row select, .table-row input{margin:0;}
+  .small-x{background:var(--err); color:white; border-radius:6px; padding:5px; font-size:11px; cursor:pointer; text-align:center;}
+  .checkbox-row{display:flex; align-items:center; gap:8px; padding:6px 0;}
+  .checkbox-row input{width:auto;}
+  .history-item{background:var(--panel-2); border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:12.5px;}
+  .history-item .meta{color:var(--text-dim); font-size:11px; margin-bottom:3px;}
+  .history-item .btn-row{margin-top:6px;}
+  .panel.collapsible h2{cursor:pointer; justify-content:space-between;}
+  .panel.collapsible h2 .h2-left{display:flex; align-items:center; gap:8px;}
+  .panel.collapsible .panel-body{display:block;}
+  .panel.collapsible.collapsed .panel-body{display:none;}
+  .toggle-caret{font-size:11px; color:var(--text-dim); transition:transform .15s ease;}
+  .panel.collapsible.collapsed .toggle-caret{transform:rotate(-90deg);}
+  .login-status-inline{font-size:11.5px; color:var(--text-dim); font-weight:400;}
+  .queue-badge{display:inline-block; background:var(--panel-2); border-radius:6px; padding:3px 8px; font-family:'JetBrains Mono',monospace; font-size:11px;}
+  .engine-block{display:none;}
+  .engine-block.show{display:block;}
+</style>
+</head>
+<body>
+
+<h1>TTS <span>Dock</span></h1>
+<p class="sub">Bit-adományok és csatornapont-beváltások felolvasása — te választod ki, melyik hangmotor mondja fel.</p>
+
+<div class="panel">
+  <h2>Élő vezérlés</h2>
+  <div class="btn-row">
+    <button class="ghost" id="pauseBtn">Szünet</button>
+    <button class="ghost" id="skipBtn">Következő kihagyása</button>
+    <button class="danger" id="clearQueueBtn">Sor ürítése</button>
+    <span class="queue-badge" id="queueBadge">Sorban: 0</span>
+  </div>
+  <label style="margin-top:12px;">Teszt felolvasás</label>
+  <div class="btn-row" style="margin-top:0;">
+    <input id="testText" type="text" placeholder="Írj be valamit a teszteléshez...">
+    <button class="primary" id="testBtn">Lejátszás</button>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>TTS motor</h2>
+  <label>Melyik szolgáltatás mondja fel a szöveget?</label>
+  <select id="ttsEngine">
+    <option value="browser">Böngésző beépített TTS (ingyenes)</option>
+    <option value="azure">Microsoft Azure</option>
+    <option value="google">Google Cloud TTS</option>
+    <option value="elevenlabs">ElevenLabs</option>
+  </select>
+
+  <div class="engine-block" data-engine="azure">
+    <label>Azure API kulcs</label>
+    <input id="azureKey" type="password" placeholder="Azure Speech kulcs">
+    <label>Régió (pl. westeurope, eastus)</label>
+    <input id="azureRegion" type="text" placeholder="westeurope">
+    <div class="hint">A régiót az Azure Speech erőforrásod "Keys and Endpoint" oldalán találod ("Location/Region" mező).</div>
+  </div>
+
+  <div class="engine-block" data-engine="google">
+    <label>Google Cloud Text-to-Speech API kulcs</label>
+    <input id="googleTtsKey" type="password" placeholder="AIza... (külön API kulcs, mint a YouTube-os)">
+    <div class="hint">Google Cloud Console → Credentials → Create Credentials → API key. Előtte engedélyezd a "Cloud Text-to-Speech API"-t is a Library-ban. Ehhez számlázási fiók bekapcsolása is kellhet a Google oldalán (az ingyenes keretig nem terhel).</div>
+  </div>
+
+  <div class="engine-block" data-engine="elevenlabs">
+    <label>ElevenLabs API kulcs</label>
+    <input id="elevenKey" type="password" placeholder="ElevenLabs API kulcs">
+    <label>Modell</label>
+    <select id="elevenModel">
+      <option value="eleven_multilingual_v2">Eleven Multilingual v2 (jobb minőség)</option>
+      <option value="eleven_turbo_v2_5">Eleven Turbo v2.5 (gyorsabb)</option>
+    </select>
+  </div>
+
+  <div class="btn-row">
+    <button class="primary" id="loadVoicesBtn">Hangok betöltése / frissítése</button>
+  </div>
+  <div class="status-line" id="engineStatus"></div>
+</div>
+
+<div class="panel">
+  <h2>Csatornapont-jutalmak</h2>
+  <div class="hint" style="margin-top:0;">Jelentkezz be Twitch-csel lent, hogy betöltsük a jutalmaid listáját. Pipáld be, melyik(ek) indítsanak TTS-t.</div>
+  <div id="rewardCheckboxes" style="margin-top:8px;"></div>
+  <button class="ghost" id="reloadRewardsBtn" style="margin-top:8px;">Jutalmak újratöltése</button>
+</div>
+
+<div class="panel">
+  <h2>Alap hang</h2>
+  <div class="row2">
+    <div>
+      <label>Hang kiválasztása</label>
+      <select id="defaultVoice"></select>
+      <div class="engine-block" data-engine="browser">
+        <label style="margin-top:8px;"><input type="checkbox" id="showAllVoices" style="width:auto;"> Minden nyelv mutatása, nem csak a magyar</label>
+      </div>
+    </div>
+    <div>
+      <div class="engine-block" data-engine="browser azure google">
+        <label>Sebesség (<span id="rateVal">1.0</span>)</label>
+        <input type="range" id="rateRange" min="0.5" max="2" step="0.1" value="1">
+        <label>Hangmagasság (<span id="pitchVal">1.0</span>)</label>
+        <input type="range" id="pitchRange" min="0" max="2" step="0.1" value="1">
+      </div>
+      <div class="engine-block" data-engine="elevenlabs">
+        <label>Stabilitás (<span id="stabilityVal">0.50</span>)</label>
+        <input type="range" id="stabilityRange" min="0" max="1" step="0.05" value="0.5">
+        <label>Hasonlóság (<span id="similarityVal">0.75</span>)</label>
+        <input type="range" id="similarityRange" min="0" max="1" step="0.05" value="0.75">
+      </div>
+      <label>Hangerő (<span id="volVal">1.0</span>)</label>
+      <input type="range" id="volRange" min="0" max="1" step="0.05" value="1">
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Bit-szintek (más hang a bitek mennyisége alapján)</h2>
+  <div id="tierRows"></div>
+  <button class="ghost" id="addTierBtn">+ Új szint</button>
+  <div class="hint">A legmagasabb küszöböt éri el, azt a hangot használja. Ami alatta van mindegyiknek, az alap hangot kapja.</div>
+</div>
+
+<div class="panel">
+  <h2>Csatornapontonkénti hang</h2>
+  <div id="rewardVoiceRows"></div>
+  <div class="hint" style="margin-top:0;">Ha egy jutalomhoz nem választasz külön hangot, az alap hangot fogja használni.</div>
+</div>
+
+<div class="panel">
+  <h2>Felhasználónkénti hang felülbírálás</h2>
+  <div id="userVoiceRows"></div>
+  <button class="ghost" id="addUserVoiceBtn">+ Új felhasználó</button>
+</div>
+
+<div class="panel">
+  <h2>Moderáció</h2>
+  <label>Tiltott szavak (soronként vagy vesszővel)</label>
+  <textarea id="blacklist" rows="3" placeholder="pl. tiltottszó, másiktiltott"></textarea>
+  <label><input type="checkbox" id="censorMode" style="width:auto;"> Csak a szót cenzúrázza (*-ra cserélve), ne dobja el az egész üzenetet</label>
+  <div class="row3" style="margin-top:10px;">
+    <div>
+      <label>Max. üzenethossz (karakter)</label>
+      <input type="number" id="maxLength" value="200" min="10">
+    </div>
+    <div>
+      <label>Várakozás felhasználónként (mp)</label>
+      <input type="number" id="userCooldown" value="10" min="0">
+    </div>
+    <div>
+      <label>Globális várakozás (mp)</label>
+      <input type="number" id="globalCooldown" value="2" min="0">
+    </div>
+  </div>
+  <label style="margin-top:10px;">Minimum bit a TTS-hez</label>
+  <input type="number" id="minBits" value="1" min="0">
+  <label style="margin-top:10px;">Letiltott felhasználók (soronként vagy vesszővel)</label>
+  <textarea id="blockedUsers" rows="2" placeholder="pl. rosszfej_user"></textarea>
+</div>
+
+<div class="panel">
+  <h2>Előzmények</h2>
+  <div id="historyList"></div>
+  <button class="ghost" id="clearHistoryBtn">Előzmények törlése</button>
+</div>
+
+<div class="panel collapsible" id="twitchLoginPanel">
+  <h2 data-toggle="twitchLoginPanel">
+    <span class="h2-left"><span class="dot" id="twitchDot"></span> Twitch bejelentkezés
+      <span class="login-status-inline" id="twitchStatus">Nincs bejelentkezve.</span>
+    </span>
+    <span class="toggle-caret">▾</span>
+  </h2>
+  <div class="panel-body">
+    <label>Twitch Kliens ID</label>
+    <input id="twitchClientId" type="text" placeholder="ugyanaz, mint a többi dockban">
+    <div class="copyfield" style="margin-top:6px;">
+      <input id="twitchRedirectUri" type="text" readonly>
+      <button class="ghost" id="copyTwitchRedirect">Másolás</button>
+    </div>
+    <div class="hint">Ezt a Redirect URI-t is vedd fel a Twitch appod beállításai közé (a többi mellé).</div>
+    <div class="btn-row">
+      <button class="primary" id="twitchLoginBtn">Bejelentkezés Twitch-csel</button>
+      <button class="ghost" id="twitchLogoutBtn">Kijelentkezés</button>
+    </div>
+    <div class="status-line" id="eventSubStatus">EventSub: nincs csatlakoztatva.</div>
+  </div>
+</div>
+
+<script>
+/* ================= ÁLLAPOT ================= */
+const twitch = { clientId:'', token:'', userId:'', login:'' };
+let eventSocket=null, sessionId=null;
+let rewards=[];
+let ttsQueue=[]; let isSpeaking=false; let paused=false;
+let lastGlobalPlay=0; const lastUserPlay=new Map();
+let currentEngineVoices=[]; // [{id,label}] a kiválasztott motorhoz
+const playerAudio = new Audio();
+
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function escapeXml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;'); }
+function normalize(s){ return s.toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); }
+function escapeRegex(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function base64ToBlob(base64, mime){
+  const byteChars = atob(base64);
+  const arr = new Uint8Array(byteChars.length);
+  for(let i=0;i<byteChars.length;i++) arr[i]=byteChars.charCodeAt(i);
+  return new Blob([arr], {type:mime});
+}
+
+/* ================= ÖSSZECSUKHATÓ PANEL ================= */
+function collapsePanel(id){ const el=document.getElementById(id); if(el) el.classList.add('collapsed'); }
+document.querySelectorAll('.panel.collapsible > h2[data-toggle]').forEach(h=>{
+  h.addEventListener('click', ()=>{ const p=document.getElementById(h.dataset.toggle); if(p) p.classList.toggle('collapsed'); });
+});
+
+/* ================= MOTORVÁLASZTÁS UI ================= */
+function currentEngine(){ return document.getElementById('ttsEngine').value; }
+function updateEngineUI(){
+  const eng = currentEngine();
+  document.querySelectorAll('.engine-block').forEach(el=>{
+    const list = el.dataset.engine.split(' ');
+    el.classList.toggle('show', list.includes(eng));
+  });
+}
+document.getElementById('ttsEngine').addEventListener('change', () => { updateEngineUI(); saveSettings(); loadVoicesForEngine(); });
+updateEngineUI();
+
+/* ================= BEÁLLÍTÁSOK MENTÉSE ================= */
+const SAVE_KEY='ttsdock_settings_v2';
+function collectSettings(){
+  return {
+    engine: currentEngine(),
+    twitchClientId: document.getElementById('twitchClientId').value,
+    azureKey: document.getElementById('azureKey').value,
+    azureRegion: document.getElementById('azureRegion').value,
+    googleTtsKey: document.getElementById('googleTtsKey').value,
+    elevenKey: document.getElementById('elevenKey').value,
+    elevenModel: document.getElementById('elevenModel').value,
+    defaultVoice: document.getElementById('defaultVoice').value,
+    showAllVoices: document.getElementById('showAllVoices').checked,
+    rate: document.getElementById('rateRange').value,
+    pitch: document.getElementById('pitchRange').value,
+    volume: document.getElementById('volRange').value,
+    stability: document.getElementById('stabilityRange').value,
+    similarity: document.getElementById('similarityRange').value,
+    tiers: collectTierRows(),
+    rewardVoices: collectRewardVoiceRows(),
+    userVoices: collectUserVoiceRows(),
+    selectedRewardIds: [...selectedRewardIds],
+    blacklist: document.getElementById('blacklist').value,
+    censorMode: document.getElementById('censorMode').checked,
+    maxLength: document.getElementById('maxLength').value,
+    userCooldown: document.getElementById('userCooldown').value,
+    globalCooldown: document.getElementById('globalCooldown').value,
+    minBits: document.getElementById('minBits').value,
+    blockedUsers: document.getElementById('blockedUsers').value
+  };
+}
+function saveSettings(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(collectSettings())); }catch(e){} }
+function loadSettingsRaw(){ try{ return JSON.parse(localStorage.getItem(SAVE_KEY)||'null'); }catch(e){ return null; } }
+['twitchClientId','azureKey','azureRegion','googleTtsKey','elevenKey','elevenModel','showAllVoices',
+ 'rateRange','pitchRange','volRange','stabilityRange','similarityRange',
+ 'blacklist','censorMode','maxLength','userCooldown','globalCooldown','minBits','blockedUsers'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', saveSettings);
+  document.getElementById(id).addEventListener('change', saveSettings);
+});
+document.getElementById('rateRange').addEventListener('input', e=>document.getElementById('rateVal').textContent=parseFloat(e.target.value).toFixed(1));
+document.getElementById('pitchRange').addEventListener('input', e=>document.getElementById('pitchVal').textContent=parseFloat(e.target.value).toFixed(1));
+document.getElementById('volRange').addEventListener('input', e=>document.getElementById('volVal').textContent=parseFloat(e.target.value).toFixed(2));
+document.getElementById('stabilityRange').addEventListener('input', e=>document.getElementById('stabilityVal').textContent=parseFloat(e.target.value).toFixed(2));
+document.getElementById('similarityRange').addEventListener('input', e=>document.getElementById('similarityVal').textContent=parseFloat(e.target.value).toFixed(2));
+
+/* ================= HANGLISTÁK (motoronként) ================= */
+function setEngineStatus(t,c){ document.getElementById('engineStatus').textContent = t||''; }
+
+async function loadVoicesForEngine(){
+  const eng = currentEngine();
+  setEngineStatus('Hangok betöltése...', 'wait');
+  if(eng === 'browser'){
+    currentEngineVoices = getBrowserVoices().map(v=>({id:v.name, label:v.name+' ('+v.lang+')'}));
+    setEngineStatus(currentEngineVoices.length + ' hang elérhető.');
+  } else if(eng === 'azure'){
+    currentEngineVoices = await loadAzureVoices();
+    if(currentEngineVoices.length) setEngineStatus(currentEngineVoices.length+' magyar Azure hang.');
+  } else if(eng === 'google'){
+    currentEngineVoices = await loadGoogleVoices();
+    if(currentEngineVoices.length) setEngineStatus(currentEngineVoices.length+' magyar Google hang.');
+  } else if(eng === 'elevenlabs'){
+    currentEngineVoices = await loadElevenVoices();
+    if(currentEngineVoices.length) setEngineStatus(currentEngineVoices.length+' ElevenLabs hang.');
+  }
+  renderAllVoiceSelects();
+}
+document.getElementById('loadVoicesBtn').onclick = loadVoicesForEngine;
+
+function getBrowserVoices(){
+  const all = speechSynthesis.getVoices();
+  const showAll = document.getElementById('showAllVoices').checked;
+  let list = showAll ? all : all.filter(v=>v.lang.toLowerCase().startsWith('hu'));
+  if(!list.length) list = all;
+  return list;
+}
+speechSynthesis.onvoiceschanged = () => { if(currentEngine()==='browser') loadVoicesForEngine(); };
+document.getElementById('showAllVoices').addEventListener('change', loadVoicesForEngine);
+
+async function loadAzureVoices(){
+  const key = document.getElementById('azureKey').value.trim();
+  const region = document.getElementById('azureRegion').value.trim();
+  if(!key||!region) return [];
+  try{
+    const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/voices/list`, { headers:{'Ocp-Apim-Subscription-Key':key} });
+    if(!res.ok){
+      const body = await res.text().catch(()=> '');
+      setEngineStatus('Azure hiba ('+res.status+'): '+body.slice(0,200));
+      return [];
+    }
+    const data = await res.json();
+    const hu = data.filter(v=>v.Locale==='hu-HU');
+    return hu.length ? hu.map(v=>({id:v.ShortName, label:v.LocalName+' ('+v.Gender+')'})) :
+      [{id:'hu-HU-NoemiNeural',label:'Noemi (nő)'},{id:'hu-HU-TamasNeural',label:'Tamás (férfi)'}];
+  } catch(e){
+    console.error('Azure voice load error:', e);
+    setEngineStatus('Hálózati/CORS hiba az Azure hívásnál — nézd meg a fejlesztői konzolt (F12) a pontos hibáért.');
+    return [];
+  }
+}
+async function loadGoogleVoices(){
+  const key = document.getElementById('googleTtsKey').value.trim();
+  if(!key) return [];
+  try{
+    const res = await fetch(`https://texttospeech.googleapis.com/v1/voices?languageCode=hu-HU&key=${encodeURIComponent(key)}`);
+    if(!res.ok){
+      const body = await res.text().catch(()=> '');
+      setEngineStatus('Google hiba ('+res.status+'): '+body.slice(0,200));
+      return [];
+    }
+    const data = await res.json();
+    return (data.voices||[]).map(v=>({id:v.name, label:v.name+' ('+v.ssmlGender+')'}));
+  } catch(e){
+    console.error('Google voice load error:', e);
+    setEngineStatus('Hálózati/CORS hiba a Google hívásnál — nézd meg a fejlesztői konzolt (F12) a pontos hibáért.');
+    return [];
+  }
+}
+async function loadElevenVoices(){
+  const key = document.getElementById('elevenKey').value.trim();
+  if(!key) return [];
+  try{
+    const res = await fetch('https://api.elevenlabs.io/v1/voices', { headers:{'xi-api-key':key} });
+    if(!res.ok){
+      const body = await res.text().catch(()=> '');
+      setEngineStatus('ElevenLabs hiba ('+res.status+'): '+body.slice(0,200));
+      return [];
+    }
+    const data = await res.json();
+    return (data.voices||[]).map(v=>({id:v.voice_id, label:v.name}));
+  } catch(e){
+    console.error('ElevenLabs voice load error:', e);
+    setEngineStatus('Hálózati/CORS hiba az ElevenLabs hívásnál — nézd meg a fejlesztői konzolt (F12) a pontos hibáért.');
+    return [];
+  }
+}
+function voiceOptionsHtml(selected){
+  if(!currentEngineVoices.length) return `<option value="">(nincs betöltött hang — kattints "Hangok betöltése"-re)</option>`;
+  return `<option value="">(alap hang)</option>` + currentEngineVoices.map(v=>`<option value="${escapeHtml(v.id)}" ${v.id===selected?'selected':''}>${escapeHtml(v.label)}</option>`).join('');
+}
+function renderAllVoiceSelects(){
+  const sel = document.getElementById('defaultVoice');
+  const prev = sel.value;
+  sel.innerHTML = currentEngineVoices.length ? currentEngineVoices.map(v=>`<option value="${escapeHtml(v.id)}">${escapeHtml(v.label)}</option>`).join('') : '<option value="">Nincs betöltött hang</option>';
+  if(prev && currentEngineVoices.some(v=>v.id===prev)) sel.value = prev;
+  else if(window._pendingDefaultVoice && currentEngineVoices.some(v=>v.id===window._pendingDefaultVoice)){ sel.value = window._pendingDefaultVoice; }
+  renderTierVoiceOptions();
+  renderRewardVoiceRows(window._pendingRewardVoices);
+  renderUserVoiceOptions();
+}
+document.getElementById('defaultVoice').addEventListener('change', saveSettings);
+
+/* ================= BIT-SZINTEK ================= */
+function addTierRow(data){
+  data = data || {minBits:100, voice:'', rate:1, pitch:1};
+  const row = document.createElement('div');
+  row.className = 'table-row';
+  row.innerHTML = `
+    <input type="number" class="tier-minbits" placeholder="Min. bit" value="${data.minBits}">
+    <select class="tier-voice">${voiceOptionsHtml(data.voice)}</select>
+    <input type="number" class="tier-rate" step="0.1" placeholder="Sebesség" value="${data.rate}">
+    <input type="number" class="tier-pitch" step="0.1" placeholder="Magasság" value="${data.pitch}">
+    <div class="small-x">✕</div>
+  `;
+  row.querySelector('.small-x').onclick = () => { row.remove(); saveSettings(); };
+  row.querySelectorAll('input,select').forEach(el=>el.addEventListener('input', saveSettings));
+  document.getElementById('tierRows').appendChild(row);
+}
+document.getElementById('addTierBtn').onclick = () => addTierRow();
+function collectTierRows(){
+  return [...document.querySelectorAll('#tierRows .table-row')].map(r=>({
+    minBits: parseInt(r.querySelector('.tier-minbits').value)||0,
+    voice: r.querySelector('.tier-voice').value,
+    rate: parseFloat(r.querySelector('.tier-rate').value)||1,
+    pitch: parseFloat(r.querySelector('.tier-pitch').value)||1
+  }));
+}
+function renderTierVoiceOptions(){
+  document.querySelectorAll('#tierRows .table-row').forEach(r=>{
+    const sel = r.querySelector('.tier-voice');
+    const cur = sel.value;
+    sel.innerHTML = voiceOptionsHtml(cur);
+  });
+}
+
+/* ================= JUTALOM-HANGOK ================= */
+let selectedRewardIds = new Set();
+function renderRewardCheckboxes(){
+  const el = document.getElementById('rewardCheckboxes');
+  if(!rewards.length){ el.innerHTML = '<div class="hint">Nincs betöltött jutalom — jelentkezz be, majd töltsd újra.</div>'; return; }
+  el.innerHTML = rewards.map(r=>`
+    <div class="checkbox-row">
+      <input type="checkbox" class="reward-check" data-id="${r.id}" ${selectedRewardIds.has(r.id)?'checked':''}>
+      <span>${escapeHtml(r.title)}</span>
+    </div>
+  `).join('');
+  el.querySelectorAll('.reward-check').forEach(cb=>{
+    cb.onchange = () => {
+      if(cb.checked) selectedRewardIds.add(cb.dataset.id); else selectedRewardIds.delete(cb.dataset.id);
+      saveSettings();
+      renderRewardVoiceRows();
+    };
+  });
+  renderRewardVoiceRows();
+}
+function renderRewardVoiceRows(savedMap){
+  const el = document.getElementById('rewardVoiceRows');
+  const active = rewards.filter(r=>selectedRewardIds.has(r.id));
+  if(!active.length){ el.innerHTML = '<div class="hint">Válassz ki legalább egy jutalmat fent.</div>'; return; }
+  const map = savedMap || collectRewardVoiceRows();
+  el.innerHTML = active.map(r=>`
+    <div class="table-row reward-row">
+      <span>${escapeHtml(r.title)}</span>
+      <select class="reward-voice" data-id="${r.id}">${voiceOptionsHtml(map[r.id]||'')}</select>
+      <span></span>
+    </div>
+  `).join('');
+  el.querySelectorAll('.reward-voice').forEach(sel=>sel.addEventListener('change', saveSettings));
+}
+function collectRewardVoiceRows(){
+  const map = {};
+  document.querySelectorAll('#rewardVoiceRows .reward-voice').forEach(sel=>{ if(sel.value) map[sel.dataset.id]=sel.value; });
+  return map;
+}
+document.getElementById('reloadRewardsBtn').onclick = loadRewards;
+
+/* ================= FELHASZNÁLÓ-HANGOK ================= */
+function addUserVoiceRow(data){
+  data = data || {username:'', voice:''};
+  const row = document.createElement('div');
+  row.className = 'table-row user-row';
+  row.innerHTML = `
+    <input type="text" class="uv-name" placeholder="Twitch felhasználónév" value="${escapeHtml(data.username)}">
+    <select class="uv-voice">${voiceOptionsHtml(data.voice)}</select>
+    <div class="small-x">✕</div>
+  `;
+  row.querySelector('.small-x').onclick = () => { row.remove(); saveSettings(); };
+  row.querySelectorAll('input,select').forEach(el=>el.addEventListener('input', saveSettings));
+  document.getElementById('userVoiceRows').appendChild(row);
+}
+document.getElementById('addUserVoiceBtn').onclick = () => addUserVoiceRow();
+function collectUserVoiceRows(){
+  return [...document.querySelectorAll('#userVoiceRows .user-row')].map(r=>({
+    username: r.querySelector('.uv-name').value.trim().toLowerCase(),
+    voice: r.querySelector('.uv-voice').value
+  })).filter(u=>u.username);
+}
+function renderUserVoiceOptions(){
+  document.querySelectorAll('#userVoiceRows .user-row').forEach(r=>{
+    const sel = r.querySelector('.uv-voice');
+    const cur = sel.value;
+    sel.innerHTML = voiceOptionsHtml(cur);
+  });
+}
+
+/* ================= MODERÁCIÓ ================= */
+function getBlacklist(){ return document.getElementById('blacklist').value.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean); }
+function getBlockedUsers(){ return document.getElementById('blockedUsers').value.split(/[\n,]+/).map(s=>normalize(s)).filter(Boolean); }
+function sanitizeText(text){
+  let out = (text||'').trim();
+  const maxLen = parseInt(document.getElementById('maxLength').value)||200;
+  if(out.length > maxLen) out = out.slice(0, maxLen);
+  const censor = document.getElementById('censorMode').checked;
+  let blocked = false;
+  getBlacklist().forEach(k=>{
+    if(!k) return;
+    const re = new RegExp(escapeRegex(k), 'gi');
+    if(re.test(out)){
+      if(censor) out = out.replace(re, m=>'*'.repeat(m.length));
+      else blocked = true;
+    }
+  });
+  return blocked ? null : out;
+}
+function passesModeration(username){
+  if(getBlockedUsers().includes(normalize(username))) return false;
+  const now = Date.now();
+  const userCd = (parseInt(document.getElementById('userCooldown').value)||0)*1000;
+  const globalCd = (parseInt(document.getElementById('globalCooldown').value)||0)*1000;
+  const lastU = lastUserPlay.get(normalize(username)) || 0;
+  if(now - lastU < userCd) return false;
+  if(now - lastGlobalPlay < globalCd) return false;
+  return true;
+}
+
+/* ================= HANG FELOLDÁS ================= */
+function getDefaultVoiceSettings(){
+  return {
+    voice: document.getElementById('defaultVoice').value,
+    rate: parseFloat(document.getElementById('rateRange').value)||1,
+    pitch: parseFloat(document.getElementById('pitchRange').value)||1,
+    volume: parseFloat(document.getElementById('volRange').value)||1,
+    stability: parseFloat(document.getElementById('stabilityRange').value)||0.5,
+    similarity: parseFloat(document.getElementById('similarityRange').value)||0.75
+  };
+}
+function resolveVoiceSettings({username, bits, rewardId}){
+  const base = getDefaultVoiceSettings();
+  const uv = collectUserVoiceRows().find(u=>u.username===normalize(username));
+  if(uv && uv.voice) return Object.assign({}, base, {voice:uv.voice});
+  if(rewardId){
+    const rv = collectRewardVoiceRows();
+    if(rv[rewardId]) return Object.assign({}, base, {voice:rv[rewardId]});
+  }
+  if(bits != null){
+    const tiers = collectTierRows().filter(t=>t.voice).sort((a,b)=>b.minBits-a.minBits);
+    for(const t of tiers){ if(bits >= t.minBits) return Object.assign({}, base, {voice:t.voice, rate:t.rate, pitch:t.pitch}); }
+  }
+  return base;
+}
+
+/* ================= LEJÁTSZÁS (motoronként) ================= */
+function playBlob(blob, volume){
+  return new Promise((resolve)=>{
+    const url = URL.createObjectURL(blob);
+    playerAudio.src = url;
+    playerAudio.volume = volume != null ? volume : 1;
+    playerAudio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+    playerAudio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+    playerAudio.play().catch(()=>resolve());
+  });
+}
+function speakBrowser(text, settings){
+  return new Promise((resolve)=>{
+    if(!text){ resolve(); return; }
+    const utter = new SpeechSynthesisUtterance(text);
+    const voices = speechSynthesis.getVoices();
+    const v = voices.find(v=>v.name===settings.voice);
+    if(v) utter.voice = v;
+    utter.rate = settings.rate || 1;
+    utter.pitch = settings.pitch != null ? settings.pitch : 1;
+    utter.volume = settings.volume != null ? settings.volume : 1;
+    utter.onend = resolve;
+    utter.onerror = resolve;
+    speechSynthesis.speak(utter);
+  });
+}
+async function speakAzure(text, settings){
+  const key = document.getElementById('azureKey').value.trim();
+  const region = document.getElementById('azureRegion').value.trim();
+  if(!key || !region || !settings.voice) return;
+  const rate = Math.round(((settings.rate||1)-1)*100);
+  const pitch = Math.round(((settings.pitch||1)-1)*100);
+  const ssml = `<speak version='1.0' xml:lang='hu-HU'><voice name='${escapeXml(settings.voice)}'><prosody rate='${rate>=0?'+':''}${rate}%' pitch='${pitch>=0?'+':''}${pitch}%'>${escapeXml(text)}</prosody></voice></speak>`;
+  try{
+    const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+      method:'POST',
+      headers:{ 'Ocp-Apim-Subscription-Key':key, 'Content-Type':'application/ssml+xml', 'X-Microsoft-OutputFormat':'audio-16khz-128kbitrate-mono-mp3' },
+      body: ssml
+    });
+    if(!res.ok) return;
+    const blob = await res.blob();
+    await playBlob(blob, settings.volume);
+  } catch(e){}
+}
+async function speakGoogle(text, settings){
+  const key = document.getElementById('googleTtsKey').value.trim();
+  if(!key || !settings.voice) return;
+  const rate = Math.min(4, Math.max(0.25, settings.rate||1));
+  const pitch = Math.min(20, Math.max(-20, ((settings.pitch||1)-1)*20));
+  try{
+    const res = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${encodeURIComponent(key)}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ input:{text}, voice:{languageCode:'hu-HU', name:settings.voice}, audioConfig:{audioEncoding:'MP3', speakingRate:rate, pitch} })
+    });
+    const data = await res.json();
+    if(!data.audioContent) return;
+    const blob = base64ToBlob(data.audioContent, 'audio/mp3');
+    await playBlob(blob, settings.volume);
+  } catch(e){}
+}
+async function speakElevenLabs(text, settings){
+  const key = document.getElementById('elevenKey').value.trim();
+  if(!key || !settings.voice) return;
+  try{
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(settings.voice)}`, {
+      method:'POST',
+      headers:{ 'xi-api-key':key, 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        text,
+        model_id: document.getElementById('elevenModel').value || 'eleven_multilingual_v2',
+        voice_settings: { stability: settings.stability!=null?settings.stability:0.5, similarity_boost: settings.similarity!=null?settings.similarity:0.75 }
+      })
+    });
+    if(!res.ok) return;
+    const blob = await res.blob();
+    await playBlob(blob, settings.volume);
+  } catch(e){}
+}
+async function speakText(text, settings){
+  const eng = currentEngine();
+  if(eng === 'browser') return speakBrowser(text, settings);
+  if(eng === 'azure') return speakAzure(text, settings);
+  if(eng === 'google') return speakGoogle(text, settings);
+  if(eng === 'elevenlabs') return speakElevenLabs(text, settings);
+}
+
+/* ================= SOR ================= */
+function updateQueueUI(){ document.getElementById('queueBadge').textContent = 'Sorban: ' + ttsQueue.length; }
+async function processQueue(){
+  if(isSpeaking || paused) return;
+  const item = ttsQueue.shift();
+  updateQueueUI();
+  if(!item) return;
+  isSpeaking = true;
+  await speakText(item.text, item.voiceSettings);
+  isSpeaking = false;
+  processQueue();
+}
+function enqueue(item){
+  ttsQueue.push(item);
+  addHistory(item);
+  updateQueueUI();
+  processQueue();
+}
+document.getElementById('pauseBtn').onclick = () => {
+  paused = !paused;
+  document.getElementById('pauseBtn').textContent = paused ? 'Folytatás' : 'Szünet';
+  if(!paused) processQueue();
+};
+document.getElementById('skipBtn').onclick = () => { speechSynthesis.cancel(); playerAudio.pause(); isSpeaking=false; processQueue(); };
+document.getElementById('clearQueueBtn').onclick = () => { ttsQueue=[]; speechSynthesis.cancel(); playerAudio.pause(); isSpeaking=false; updateQueueUI(); };
+document.getElementById('testBtn').onclick = () => {
+  const text = document.getElementById('testText').value.trim();
+  if(text) speakText(text, getDefaultVoiceSettings());
+};
+
+/* ================= ELŐZMÉNYEK ================= */
+const HISTORY_KEY='ttsdock_history_v1';
+function loadHistoryList(){ try{ return JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]'); }catch(e){ return []; } }
+function saveHistoryList(list){ try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(-200))); }catch(e){} }
+function addHistory(item){
+  const list = loadHistoryList();
+  list.push({ source:item.source, username:item.username, amount:item.amount, text:item.text, voiceSettings:item.voiceSettings, engine:currentEngine(), time:new Date().toISOString() });
+  saveHistoryList(list);
+  renderHistory();
+}
+function renderHistory(){
+  const list = loadHistoryList().slice().reverse();
+  const el = document.getElementById('historyList');
+  el.innerHTML = list.length ? list.map((h,i)=>{
+    const realIndex = loadHistoryList().length - 1 - i;
+    const label = h.source==='bits' ? `${h.amount} bit` : `csatornapont: ${h.amount}`;
+    return `<div class="history-item">
+      <div class="meta">${new Date(h.time).toLocaleTimeString('hu-HU')} — ${escapeHtml(h.username)} (${escapeHtml(label)}) · ${escapeHtml(h.engine||'')}</div>
+      <div>${escapeHtml(h.text)}</div>
+      <div class="btn-row">
+        <button class="ghost" data-act="replay" data-i="${realIndex}">▶ Újrajátszás</button>
+        <button class="ghost" data-act="del" data-i="${realIndex}">Törlés</button>
+      </div>
+    </div>`;
+  }).join('') : '<div class="hint">Még nincs előzmény.</div>';
+  el.querySelectorAll('button').forEach(btn=>{
+    btn.onclick = () => {
+      const list2 = loadHistoryList();
+      const h = list2[parseInt(btn.dataset.i)];
+      if(!h) return;
+      if(btn.dataset.act === 'replay') speakText(h.text, h.voiceSettings);
+      else { list2.splice(parseInt(btn.dataset.i),1); saveHistoryList(list2); renderHistory(); }
+    };
+  });
+}
+document.getElementById('clearHistoryBtn').onclick = () => { saveHistoryList([]); renderHistory(); };
+
+/* ================= TWITCH OAUTH ================= */
+function twitchRedirectUri(){ return window.location.origin + window.location.pathname; }
+document.getElementById('twitchRedirectUri').value = twitchRedirectUri();
+document.getElementById('copyTwitchRedirect').onclick = () => navigator.clipboard.writeText(twitchRedirectUri());
+function setTwitchStatus(t,c){ document.getElementById('twitchStatus').textContent=t; document.getElementById('twitchDot').className='dot '+(c||''); }
+function setEventSubStatus(t,c){ document.getElementById('eventSubStatus').textContent = 'EventSub: '+t; }
+
+document.getElementById('twitchLoginBtn').onclick = () => {
+  const clientId = document.getElementById('twitchClientId').value.trim();
+  if(!clientId){ setTwitchStatus('Add meg a Twitch Kliens ID-t előbb.'); return; }
+  const scopes = ['bits:read','channel:read:redemptions'].join(' ');
+  const url = `https://id.twitch.tv/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(twitchRedirectUri())}&response_type=token&scope=${encodeURIComponent(scopes)}&force_verify=true`;
+  window.location.href = url;
+};
+document.getElementById('twitchLogoutBtn').onclick = () => {
+  twitch.token=''; twitch.userId=''; twitch.login='';
+  if(eventSocket) eventSocket.close();
+  setTwitchStatus('Nincs bejelentkezve.', '');
+  setEventSubStatus('nincs csatlakoztatva.', '');
+};
+async function completeTwitchLogin(token){
+  twitch.token = token;
+  twitch.clientId = document.getElementById('twitchClientId').value.trim();
+  if(!twitch.clientId){ setTwitchStatus('Hiányzik a Twitch Kliens ID, jelentkezz be újra.', 'err'); twitch.token=''; return; }
+  try{
+    const res = await fetch('https://api.twitch.tv/helix/users', { headers:{ 'Authorization':'Bearer '+token, 'Client-Id':twitch.clientId } });
+    const data = await res.json();
+    const u = data.data && data.data[0];
+    if(u){
+      twitch.login=u.login; twitch.userId=u.id;
+      setTwitchStatus('Bejelentkezve: '+u.display_name, 'ok');
+      collapsePanel('twitchLoginPanel');
+      loadRewards();
+      connectEventSub();
+    } else {
+      setTwitchStatus('A bejelentkezés nem sikerült — ellenőrizd a Kliens ID-t.', 'err');
+      twitch.token='';
+    }
+  } catch(e){ setTwitchStatus('Hiba a bejelentkezés feldolgozásakor.', 'err'); twitch.token=''; }
+}
+async function loadRewards(){
+  if(!twitch.token) return;
+  try{
+    const res = await fetch(`https://api.twitch.tv/helix/channel_points/custom_rewards?broadcaster_id=${twitch.userId}`, {
+      headers:{ 'Authorization':'Bearer '+twitch.token, 'Client-Id':twitch.clientId }
+    });
+    const data = await res.json();
+    rewards = data.data || [];
+    renderRewardCheckboxes();
+  } catch(e){}
+}
+
+/* ================= EVENTSUB (WebSocket) ================= */
+function connectEventSub(){
+  setEventSubStatus('csatlakozás...', 'wait');
+  eventSocket = new WebSocket('wss://eventsub.wss.twitch.tv/ws');
+  attachSocketHandlers(eventSocket);
+}
+function attachSocketHandlers(socket){
+  socket.onmessage = (ev) => {
+    let msg; try{ msg = JSON.parse(ev.data); } catch(e){ return; }
+    const type = msg.metadata && msg.metadata.message_type;
+    if(type === 'session_welcome'){
+      sessionId = msg.payload.session.id;
+      setEventSubStatus('kapcsolódva.', 'ok');
+      subscribeToEvents();
+    } else if(type === 'notification'){
+      handleEventNotification(msg.payload.subscription.type, msg.payload.event);
+    } else if(type === 'session_reconnect'){
+      const newSocket = new WebSocket(msg.payload.session.reconnect_url);
+      newSocket.onopen = () => { const old = eventSocket; eventSocket = newSocket; attachSocketHandlers(newSocket); old.close(); };
+    } else if(type === 'revocation'){
+      setEventSubStatus('egy feliratkozás visszavonva ('+msg.payload.subscription.type+').', 'err');
+    }
+  };
+  socket.onclose = () => {
+    if(socket !== eventSocket) return;
+    setEventSubStatus('kapcsolat bontva, újrapróbálkozás...', 'err');
+    setTimeout(()=>{ if(twitch.token) connectEventSub(); }, 4000);
+  };
+}
+async function subscribeToEvents(){
+  await createSubscription('channel.cheer','1',{broadcaster_user_id:twitch.userId});
+  await createSubscription('channel.channel_points_custom_reward_redemption.add','1',{broadcaster_user_id:twitch.userId});
+}
+async function createSubscription(type, version, condition){
+  try{
+    const res = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
+      method:'POST',
+      headers:{ 'Authorization':'Bearer '+twitch.token, 'Client-Id':twitch.clientId, 'Content-Type':'application/json' },
+      body: JSON.stringify({ type, version, condition, transport:{ method:'websocket', session_id:sessionId } })
+    });
+    if(!res.ok){
+      const err = await res.json().catch(()=>({}));
+      setEventSubStatus('feliratkozási hiba ('+type+'): '+(err.message||res.status), 'err');
+    }
+  } catch(e){ setEventSubStatus('hálózati hiba a feliratkozásnál.', 'err'); }
+}
+function handleEventNotification(type, event){
+  if(type === 'channel.cheer'){
+    const username = event.is_anonymous ? 'Névtelen' : (event.user_name || 'ismeretlen');
+    const bits = event.bits;
+    const minBits = parseInt(document.getElementById('minBits').value)||0;
+    if(bits < minBits) return;
+    if(!passesModeration(username)) return;
+    const text = sanitizeText(event.message || '');
+    if(text == null || !text) return;
+    const voiceSettings = resolveVoiceSettings({username, bits});
+    lastUserPlay.set(normalize(username), Date.now()); lastGlobalPlay = Date.now();
+    enqueue({ source:'bits', username, amount:bits, text, voiceSettings });
+  } else if(type === 'channel.channel_points_custom_reward_redemption.add'){
+    const rewardId = event.reward.id;
+    if(!selectedRewardIds.has(rewardId)) return;
+    const username = event.user_name || 'ismeretlen';
+    if(!passesModeration(username)) return;
+    const text = sanitizeText(event.user_input || '');
+    if(text == null || !text) return;
+    const voiceSettings = resolveVoiceSettings({username, rewardId});
+    lastUserPlay.set(normalize(username), Date.now()); lastGlobalPlay = Date.now();
+    enqueue({ source:'points', username, amount:event.reward.title, text, voiceSettings });
+  }
+}
+
+/* ================= INDÍTÁS ================= */
+function applySettings(s){
+  if(!s) return;
+  if(s.engine) document.getElementById('ttsEngine').value = s.engine;
+  if(s.twitchClientId) document.getElementById('twitchClientId').value = s.twitchClientId;
+  if(s.azureKey) document.getElementById('azureKey').value = s.azureKey;
+  if(s.azureRegion) document.getElementById('azureRegion').value = s.azureRegion;
+  if(s.googleTtsKey) document.getElementById('googleTtsKey').value = s.googleTtsKey;
+  if(s.elevenKey) document.getElementById('elevenKey').value = s.elevenKey;
+  if(s.elevenModel) document.getElementById('elevenModel').value = s.elevenModel;
+  if(typeof s.showAllVoices==='boolean') document.getElementById('showAllVoices').checked = s.showAllVoices;
+  if(s.rate){ document.getElementById('rateRange').value=s.rate; document.getElementById('rateVal').textContent=parseFloat(s.rate).toFixed(1); }
+  if(s.pitch){ document.getElementById('pitchRange').value=s.pitch; document.getElementById('pitchVal').textContent=parseFloat(s.pitch).toFixed(1); }
+  if(s.volume){ document.getElementById('volRange').value=s.volume; document.getElementById('volVal').textContent=parseFloat(s.volume).toFixed(2); }
+  if(s.stability){ document.getElementById('stabilityRange').value=s.stability; document.getElementById('stabilityVal').textContent=parseFloat(s.stability).toFixed(2); }
+  if(s.similarity){ document.getElementById('similarityRange').value=s.similarity; document.getElementById('similarityVal').textContent=parseFloat(s.similarity).toFixed(2); }
+  if(s.blacklist) document.getElementById('blacklist').value = s.blacklist;
+  if(typeof s.censorMode==='boolean') document.getElementById('censorMode').checked = s.censorMode;
+  if(s.maxLength) document.getElementById('maxLength').value = s.maxLength;
+  if(s.userCooldown!=null) document.getElementById('userCooldown').value = s.userCooldown;
+  if(s.globalCooldown!=null) document.getElementById('globalCooldown').value = s.globalCooldown;
+  if(s.minBits!=null) document.getElementById('minBits').value = s.minBits;
+  if(s.blockedUsers) document.getElementById('blockedUsers').value = s.blockedUsers;
+  if(s.selectedRewardIds) selectedRewardIds = new Set(s.selectedRewardIds);
+  (s.tiers||[]).forEach(t=>addTierRow(t));
+  (s.userVoices||[]).forEach(u=>addUserVoiceRow(u));
+  window._pendingDefaultVoice = s.defaultVoice;
+  window._pendingRewardVoices = s.rewardVoices;
+}
+applySettings(loadSettingsRaw());
+updateEngineUI();
+loadVoicesForEngine();
+renderHistory();
+updateQueueUI();
+
+(function handleOAuthReturn(){
+  if(window.location.hash.includes('access_token')){
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const token = params.get('access_token');
+    if(token){
+      completeTwitchLogin(token);
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }
+})();
+</script>
+</body>
+</html>
