@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stream Infó</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0d0e14; --panel:#161822; --panel-2:#1e2130; --line:#2a2d3d;
+    --text:#eceef5; --text-dim:#9096ab;
+    --twitch:#9146ff; --youtube:#ff2323; --ok:#42d477; --err:#e0473a; --warn:#e0b23a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'Inter', sans-serif; font-size:13.5px;
+    padding:16px; max-width:820px; margin:0 auto 60px;
+  }
+  h1{font-family:'JetBrains Mono', monospace; font-size:20px; margin:4px 0 2px;}
+  h1 span{color:var(--twitch);} h1 span.yt{color:var(--youtube);}
+  .sub{color:var(--text-dim); font-size:12.5px; margin:0 0 18px;}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:16px;}
+  .panel h2{font-size:12px; text-transform:uppercase; letter-spacing:1.2px; color:var(--text-dim); margin:0 0 12px; display:flex; align-items:center; gap:8px;}
+  .dot{width:8px; height:8px; border-radius:50%; background:#555; flex:none;}
+  .dot.ok{background:var(--ok); box-shadow:0 0 6px var(--ok);}
+  .dot.err{background:var(--err);}
+  .dot.wait{background:var(--warn);}
+  label{display:block; font-size:12px; color:var(--text-dim); margin:10px 0 4px;}
+  input[type=text], input[type=password], textarea, select{
+    width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:8px;
+    padding:8px 10px; color:var(--text); font-size:13px; font-family:'JetBrains Mono', monospace;
+  }
+  textarea{resize:vertical; font-family:'Inter', sans-serif;}
+  button{
+    font-family:'Inter', sans-serif; font-weight:700; font-size:12.5px; border:none;
+    border-radius:8px; padding:8px 13px; cursor:pointer; background:var(--panel-2); color:var(--text);
+  }
+  button:hover{filter:brightness(1.15);}
+  button.primary{background:var(--twitch); color:white;}
+  button.yt-btn{background:var(--youtube); color:white;}
+  button.ghost{background:transparent; border:1px solid var(--line);}
+  button.big{padding:12px 18px; font-size:14px; width:100%;}
+  .btn-row{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .status-line{font-size:11.5px; color:var(--text-dim); margin-top:7px; min-height:14px;}
+  .hint{font-size:11px; color:var(--text-dim); margin-top:5px; line-height:1.5;}
+  .col-title{font-weight:700; font-size:13px; margin-bottom:8px; display:flex; align-items:center; gap:6px;}
+  .col-title.tw{color:var(--twitch);} .col-title.yt{color:var(--youtube);}
+  .autocomplete{position:relative;}
+  .suggestions{
+    position:absolute; top:100%; left:0; right:0; background:var(--panel-2);
+    border:1px solid var(--line); border-radius:8px; max-height:180px; overflow-y:auto; z-index:10; display:none;
+  }
+  .suggestions.show{display:block;}
+  .suggestion-item{padding:7px 10px; cursor:pointer; font-family:'Inter',sans-serif; font-size:12.5px;}
+  .suggestion-item:hover{background:var(--panel);}
+  .preset-row{display:flex; align-items:center; gap:8px; background:var(--panel-2); border-radius:8px; padding:7px 9px; margin-bottom:6px;}
+  .preset-row .pname{flex:1; font-weight:600;}
+  .preset-row button{padding:5px 9px; font-size:11px;}
+  .copyfield{display:flex; gap:6px; align-items:center;}
+  .copyfield input{flex:1;}
+  .panel.collapsible .panel-body{display:block;}
+  .panel.collapsible.collapsed .panel-body{display:none;}
+  .panel.collapsible h2{cursor:pointer; justify-content:space-between;}
+  .panel.collapsible h2 .h2-left{display:flex; align-items:center; gap:8px;}
+  .toggle-caret{font-size:11px; color:var(--text-dim); transition:transform .15s ease;}
+  .panel.collapsible.collapsed .toggle-caret{transform:rotate(-90deg);}
+  .login-status-inline{font-size:11.5px; color:var(--text-dim); font-weight:400; text-transform:none; letter-spacing:0;}
+</style>
+</head>
+<body>
+
+<h1>Stream <span>Infó</span><span class="yt">.</span></h1>
+<p class="sub">Cím, kategória/játék, címkék egy helyen — mindkét platformra.</p>
+
+<div class="panel">
+  <h2>Cím</h2>
+  <div class="row2">
+    <div>
+      <div class="col-title tw">🟪 Twitch cím</div>
+      <input id="twitchTitle" type="text" placeholder="Stream cím Twitchen">
+    </div>
+    <div>
+      <div class="col-title yt">🔴 YouTube cím</div>
+      <input id="ytTitle" type="text" placeholder="Stream cím YouTube-on">
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="ghost" id="copyTitleToYt">Twitch cím → YouTube-ra másolása</button>
+    <button class="ghost" id="copyTitleToTwitch">YouTube cím → Twitch-re másolása</button>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Kategória / Játék</h2>
+  <div class="row2">
+    <div>
+      <div class="col-title tw">🟪 Twitch játék</div>
+      <div class="autocomplete">
+        <input id="twitchGameSearch" type="text" placeholder="Kezdj el gépelni egy játéknevet...">
+        <div class="suggestions" id="twitchGameSuggestions"></div>
+      </div>
+      <div class="hint">Kiválasztott: <span id="twitchGameSelected">nincs</span></div>
+    </div>
+    <div>
+      <div class="col-title yt">🔴 YouTube kategória</div>
+      <select id="ytCategorySelect"><option value="">Jelentkezz be a listáért</option></select>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Címkék</h2>
+  <div class="row2">
+    <div>
+      <div class="col-title tw">🟪 Twitch címkék (max 10, vesszővel)</div>
+      <input id="twitchTags" type="text" placeholder="pl. Magyar, Kezdő, Vicces">
+    </div>
+    <div>
+      <div class="col-title yt">🔴 YouTube címkék (vesszővel)</div>
+      <input id="ytTags" type="text" placeholder="pl. gaming, magyar, live">
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Egyéb</h2>
+  <div class="row2">
+    <div>
+      <div class="col-title tw">🟪 Twitch nyelv</div>
+      <select id="twitchLang">
+        <option value="hu">Magyar</option>
+        <option value="en">Angol</option>
+        <option value="de">Német</option>
+        <option value="sk">Szlovák</option>
+        <option value="ro">Román</option>
+        <option value="pl">Lengyel</option>
+        <option value="cs">Cseh</option>
+        <option value="fr">Francia</option>
+        <option value="es">Spanyol</option>
+        <option value="it">Olasz</option>
+        <option value="ru">Orosz</option>
+      </select>
+    </div>
+    <div>
+      <div class="col-title yt">🔴 YouTube leírás</div>
+      <textarea id="ytDescription" rows="3" placeholder="YouTube leírás szövege..."></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <button class="big primary" id="sendBothBtn">Küldés mindkét platformra</button>
+  <div class="btn-row">
+    <button class="ghost" id="sendTwitchBtn">Csak Twitch</button>
+    <button class="ghost" id="sendYtBtn">Csak YouTube</button>
+  </div>
+  <div class="status-line" id="sendStatus"></div>
+</div>
+
+<div class="panel">
+  <h2>Sablonok</h2>
+  <div id="presetList"></div>
+  <div class="btn-row">
+    <input id="presetName" type="text" placeholder="Új sablon neve" style="flex:1;">
+    <button class="ghost" id="savePresetBtn">Jelenlegi mentése sablonként</button>
+  </div>
+</div>
+
+<div class="panel collapsible" id="twitchLoginPanel">
+  <h2 data-toggle="twitchLoginPanel">
+    <span class="h2-left"><span class="dot" id="twitchDot"></span> Twitch bejelentkezés
+      <span class="login-status-inline" id="twitchStatus">Nincs bejelentkezve.</span>
+    </span>
+    <span class="toggle-caret">▾</span>
+  </h2>
+  <div class="panel-body">
+    <label>Twitch Kliens ID</label>
+    <input id="twitchClientId" type="text" placeholder="ugyanaz, mint a chat dockban">
+    <div class="copyfield" style="margin-top:6px;">
+      <input id="twitchRedirectUri" type="text" readonly>
+      <button class="ghost" id="copyTwitchRedirect">Másolás</button>
+    </div>
+    <div class="hint">Ezt a Redirect URI-t is add hozzá a Twitch appod beállításainál (a chat dockos mellé, ugyanabba az appba, ha ugyanoda mutat — ha másik oldalra tetted ezt a fájlt, ide egy új URI-t kell felvenni).</div>
+    <div class="btn-row">
+      <button class="primary" id="twitchLoginBtn">Bejelentkezés Twitch-csel</button>
+      <button class="ghost" id="twitchLogoutBtn">Kijelentkezés</button>
+    </div>
+  </div>
+</div>
+
+<div class="panel collapsible" id="ytLoginPanel">
+  <h2 data-toggle="ytLoginPanel">
+    <span class="h2-left"><span class="dot" id="ytDot"></span> YouTube bejelentkezés
+      <span class="login-status-inline" id="ytStatus">Nincs bejelentkezve.</span>
+    </span>
+    <span class="toggle-caret">▾</span>
+  </h2>
+  <div class="panel-body">
+    <label>Google Kliens ID</label>
+    <input id="googleClientId" type="text" placeholder="ugyanaz, mint a chat dockban">
+    <div class="copyfield" style="margin-top:6px;">
+      <input id="googleOrigin" type="text" readonly>
+      <button class="ghost" id="copyGoogleOrigin">Másolás</button>
+    </div>
+    <div class="hint">Ugyanazt az origint add meg, mint a chat dockhoz, ha ugyanarról a domainről fut.</div>
+    <div class="btn-row">
+      <button class="yt-btn" id="ytLoginBtn">Bejelentkezés Google-lel</button>
+      <button class="ghost" id="ytLogoutBtn">Kijelentkezés</button>
+      <button class="ghost" id="ytRefreshBroadcastBtn">Élő/következő adás keresése</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= ÖSSZECSUKHATÓ PANELEK ================= */
+function collapsePanel(id){ const el=document.getElementById(id); if(el) el.classList.add('collapsed'); }
+function expandPanel(id){ const el=document.getElementById(id); if(el) el.classList.remove('collapsed'); }
+document.querySelectorAll('.panel.collapsible > h2[data-toggle]').forEach(h=>{
+  h.addEventListener('click', () => {
+    const panel = document.getElementById(h.dataset.toggle);
+    if(panel) panel.classList.toggle('collapsed');
+  });
+});
+
+/* ================= ÁLLAPOT ================= */
+const twitch = { clientId:'', token:'', userId:'', login:'', gameId:'', gameName:'' };
+const yt = { googleClientId:'', accessToken:'', tokenClient:null, videoId:'', broadcastLabel:'' };
+
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+/* ================= MENTETT ADATOK ================= */
+const SAVE_KEY = 'streaminfo_settings_v1';
+function saveFieldSettings(){
+  try{
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      twitchClientId: document.getElementById('twitchClientId').value,
+      googleClientId: document.getElementById('googleClientId').value
+    }));
+  } catch(e){}
+}
+function loadFieldSettings(){
+  try{
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(!raw) return;
+    const s = JSON.parse(raw);
+    if(s.twitchClientId) document.getElementById('twitchClientId').value = s.twitchClientId;
+    if(s.googleClientId) document.getElementById('googleClientId').value = s.googleClientId;
+  } catch(e){}
+}
+['twitchClientId','googleClientId'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', saveFieldSettings);
+});
+
+/* ================= TWITCH OAUTH ================= */
+function twitchRedirectUri(){ return window.location.origin + window.location.pathname; }
+document.getElementById('twitchRedirectUri').value = twitchRedirectUri();
+document.getElementById('copyTwitchRedirect').onclick = () => navigator.clipboard.writeText(twitchRedirectUri());
+
+function setTwitchStatus(t,c){ document.getElementById('twitchStatus').textContent=t; document.getElementById('twitchDot').className='dot '+(c||''); }
+
+document.getElementById('twitchLoginBtn').onclick = () => {
+  const clientId = document.getElementById('twitchClientId').value.trim();
+  if(!clientId){ setTwitchStatus('Add meg a Twitch Kliens ID-t előbb.'); return; }
+  const scopes = ['channel:manage:broadcast'].join(' ');
+  const url = `https://id.twitch.tv/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(twitchRedirectUri())}&response_type=token&scope=${encodeURIComponent(scopes)}&force_verify=true`;
+  window.location.href = url;
+};
+document.getElementById('twitchLogoutBtn').onclick = () => {
+  twitch.token=''; twitch.userId=''; twitch.login='';
+  setTwitchStatus('Nincs bejelentkezve.', '');
+};
+async function completeTwitchLogin(token){
+  twitch.token = token;
+  twitch.clientId = document.getElementById('twitchClientId').value.trim();
+  if(!twitch.clientId){ setTwitchStatus('Hiányzik a Twitch Kliens ID, jelentkezz be újra a megadása után.', 'err'); twitch.token=''; return; }
+  try{
+    const res = await fetch('https://api.twitch.tv/helix/users', { headers:{ 'Authorization':'Bearer '+token, 'Client-Id':twitch.clientId } });
+    const data = await res.json();
+    const u = data.data && data.data[0];
+    if(u){
+      twitch.login=u.login; twitch.userId=u.id;
+      setTwitchStatus('Bejelentkezve: '+u.display_name, 'ok');
+      collapsePanel('twitchLoginPanel');
+      prefillTwitchChannelInfo();
+    } else {
+      setTwitchStatus('A bejelentkezés nem sikerült — ellenőrizd a Kliens ID-t.', 'err');
+      twitch.token='';
+    }
+  } catch(e){ setTwitchStatus('Hiba a bejelentkezés feldolgozásakor.', 'err'); twitch.token=''; }
+}
+async function prefillTwitchChannelInfo(){
+  if(!twitch.token) return;
+  try{
+    const res = await fetch(`https://api.twitch.tv/helix/channels?broadcaster_id=${twitch.userId}`, {
+      headers:{ 'Authorization':'Bearer '+twitch.token, 'Client-Id':twitch.clientId }
+    });
+    const data = await res.json();
+    const c = data.data && data.data[0];
+    if(c){
+      document.getElementById('twitchTitle').value = c.title || '';
+      document.getElementById('twitchTags').value = (c.tags||[]).join(', ');
+      document.getElementById('twitchLang').value = c.broadcaster_language || 'hu';
+      if(c.game_name){ twitch.gameId=c.game_id; twitch.gameName=c.game_name; document.getElementById('twitchGameSelected').textContent=c.game_name; }
+    }
+  } catch(e){}
+}
+
+/* --- Twitch játék kereső --- */
+let gameSearchTimer=null;
+document.getElementById('twitchGameSearch').addEventListener('input', (e)=>{
+  clearTimeout(gameSearchTimer);
+  const q = e.target.value.trim();
+  const box = document.getElementById('twitchGameSuggestions');
+  if(!q || !twitch.token){ box.classList.remove('show'); return; }
+  gameSearchTimer = setTimeout(async ()=>{
+    try{
+      const res = await fetch(`https://api.twitch.tv/helix/search/categories?query=${encodeURIComponent(q)}`, {
+        headers:{ 'Authorization':'Bearer '+twitch.token, 'Client-Id':twitch.clientId }
+      });
+      const data = await res.json();
+      const items = (data.data||[]).slice(0,8);
+      box.innerHTML = items.map(g=>`<div class="suggestion-item" data-id="${g.id}" data-name="${escapeHtml(g.name)}">${escapeHtml(g.name)}</div>`).join('');
+      box.classList.toggle('show', items.length>0);
+      box.querySelectorAll('.suggestion-item').forEach(el=>{
+        el.onclick = () => {
+          twitch.gameId = el.dataset.id; twitch.gameName = el.dataset.name;
+          document.getElementById('twitchGameSelected').textContent = el.dataset.name;
+          document.getElementById('twitchGameSearch').value = '';
+          box.classList.remove('show');
+        };
+      });
+    } catch(e){}
+  }, 300);
+});
+document.addEventListener('click', (e)=>{
+  if(!e.target.closest('.autocomplete')) document.getElementById('twitchGameSuggestions').classList.remove('show');
+});
+
+/* ================= GOOGLE OAUTH ================= */
+document.getElementById('googleOrigin').value = window.location.origin;
+document.getElementById('copyGoogleOrigin').onclick = () => navigator.clipboard.writeText(window.location.origin);
+function setYtStatus(t,c){ document.getElementById('ytStatus').textContent=t; document.getElementById('ytDot').className='dot '+(c||''); }
+
+function initGoogleTokenClient(){
+  const clientId = document.getElementById('googleClientId').value.trim();
+  if(!clientId || typeof google === 'undefined') return null;
+  return google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: 'https://www.googleapis.com/auth/youtube',
+    callback: (resp) => {
+      if(resp && resp.access_token){
+        yt.accessToken = resp.access_token;
+        setYtStatus('Bejelentkezve.', 'ok');
+        collapsePanel('ytLoginPanel');
+        loadYoutubeCategories();
+        findCurrentBroadcast();
+      } else {
+        setYtStatus('A bejelentkezés nem sikerült.', 'err');
+      }
+    }
+  });
+}
+document.getElementById('ytLoginBtn').onclick = () => {
+  yt.tokenClient = initGoogleTokenClient();
+  if(!yt.tokenClient){ setYtStatus('Add meg a Google Kliens ID-t előbb, és várj, míg betölt a Google szkript.', 'err'); return; }
+  yt.tokenClient.requestAccessToken();
+};
+document.getElementById('ytLogoutBtn').onclick = () => {
+  yt.accessToken=''; yt.videoId=''; setYtStatus('Nincs bejelentkezve.', '');
+};
+
+async function loadYoutubeCategories(){
+  try{
+    const res = await fetch('https://www.googleapis.com/youtube/v3/videoCategories?part=snippet&regionCode=HU', {
+      headers:{ 'Authorization':'Bearer '+yt.accessToken }
+    });
+    const data = await res.json();
+    const sel = document.getElementById('ytCategorySelect');
+    sel.innerHTML = (data.items||[]).filter(c=>c.snippet.assignable).map(c=>`<option value="${c.id}">${escapeHtml(c.snippet.title)}</option>`).join('');
+  } catch(e){}
+}
+async function findCurrentBroadcast(){
+  if(!yt.accessToken) return;
+  document.getElementById('ytStatus').textContent = 'Élő/következő adás keresése...';
+  try{
+    let res = await fetch('https://www.googleapis.com/youtube/v3/liveBroadcasts?part=snippet,status&broadcastStatus=active&mine=true', {
+      headers:{ 'Authorization':'Bearer '+yt.accessToken }
+    });
+    let data = await res.json();
+    let item = data.items && data.items[0];
+    if(!item){
+      res = await fetch('https://www.googleapis.com/youtube/v3/liveBroadcasts?part=snippet,status&broadcastStatus=upcoming&mine=true', {
+        headers:{ 'Authorization':'Bearer '+yt.accessToken }
+      });
+      data = await res.json();
+      item = data.items && data.items[0];
+    }
+    if(item){
+      yt.videoId = item.id;
+      yt.broadcastLabel = item.snippet.title + ' (' + item.status.lifeCycleStatus + ')';
+      setYtStatus('Bejelentkezve. Kiválasztott adás: ' + yt.broadcastLabel, 'ok');
+      document.getElementById('ytTitle').value = item.snippet.title || '';
+      document.getElementById('ytDescription').value = item.snippet.description || '';
+    } else {
+      setYtStatus('Bejelentkezve, de nem található élő vagy közelgő adás. Indíts/ütemezz egyet a YouTube Studio-ban, majd kattints "Élő/következő adás keresése"-re.', 'warn');
+    }
+  } catch(e){ setYtStatus('Hiba az adás keresésekor.', 'err'); }
+}
+document.getElementById('ytRefreshBroadcastBtn').onclick = findCurrentBroadcast;
+
+/* ================= CÍM MÁSOLÁS ================= */
+document.getElementById('copyTitleToYt').onclick = () => { document.getElementById('ytTitle').value = document.getElementById('twitchTitle').value; };
+document.getElementById('copyTitleToTwitch').onclick = () => { document.getElementById('twitchTitle').value = document.getElementById('ytTitle').value; };
+
+/* ================= KÜLDÉS ================= */
+function setSendStatus(t){ document.getElementById('sendStatus').textContent = t; }
+
+async function sendTwitch(){
+  if(!twitch.token || !twitch.userId){ setSendStatus('Twitch: nincs bejelentkezve.'); return false; }
+  const body = {};
+  const title = document.getElementById('twitchTitle').value.trim();
+  if(title) body.title = title;
+  if(twitch.gameId) body.game_id = twitch.gameId;
+  const tags = document.getElementById('twitchTags').value.split(',').map(s=>s.trim()).filter(Boolean).slice(0,10);
+  if(tags.length) body.tags = tags;
+  body.broadcaster_language = document.getElementById('twitchLang').value;
+  try{
+    const res = await fetch(`https://api.twitch.tv/helix/channels?broadcaster_id=${twitch.userId}`, {
+      method:'PATCH',
+      headers:{ 'Authorization':'Bearer '+twitch.token, 'Client-Id':twitch.clientId, 'Content-Type':'application/json' },
+      body: JSON.stringify(body)
+    });
+    if(res.ok || res.status===204){ setSendStatus('Twitch: sikeresen frissítve.'); return true; }
+    setSendStatus('Twitch: hiba történt a frissítéskor ('+res.status+').'); return false;
+  } catch(e){ setSendStatus('Twitch: hálózati hiba.'); return false; }
+}
+async function sendYoutube(){
+  if(!yt.accessToken || !yt.videoId){ setSendStatus('YouTube: nincs bejelentkezve vagy nincs kiválasztott adás.'); return false; }
+  try{
+    const cur = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${yt.videoId}`, {
+      headers:{ 'Authorization':'Bearer '+yt.accessToken }
+    }).then(r=>r.json());
+    const existing = cur.items && cur.items[0] && cur.items[0].snippet;
+    if(!existing){ setSendStatus('YouTube: nem található a videó adatai.'); return false; }
+    const snippet = Object.assign({}, existing);
+    const title = document.getElementById('ytTitle').value.trim();
+    if(title) snippet.title = title;
+    const desc = document.getElementById('ytDescription').value;
+    if(desc) snippet.description = desc;
+    const tags = document.getElementById('ytTags').value.split(',').map(s=>s.trim()).filter(Boolean);
+    if(tags.length) snippet.tags = tags;
+    const catId = document.getElementById('ytCategorySelect').value;
+    if(catId) snippet.categoryId = catId;
+    const res = await fetch('https://www.googleapis.com/youtube/v3/videos?part=snippet', {
+      method:'PUT',
+      headers:{ 'Authorization':'Bearer '+yt.accessToken, 'Content-Type':'application/json' },
+      body: JSON.stringify({ id: yt.videoId, snippet })
+    });
+    if(res.ok){ setSendStatus('YouTube: sikeresen frissítve.'); return true; }
+    setSendStatus('YouTube: hiba történt a frissítéskor ('+res.status+').'); return false;
+  } catch(e){ setSendStatus('YouTube: hálózati hiba.'); return false; }
+}
+document.getElementById('sendTwitchBtn').onclick = sendTwitch;
+document.getElementById('sendYtBtn').onclick = sendYoutube;
+document.getElementById('sendBothBtn').onclick = async () => {
+  setSendStatus('Küldés...');
+  const a = await sendTwitch();
+  const b = await sendYoutube();
+  setSendStatus((a?'Twitch ✔ ':'Twitch ✘ ') + (b?'YouTube ✔':'YouTube ✘'));
+};
+
+/* ================= SABLONOK ================= */
+const PRESET_KEY = 'streaminfo_presets_v1';
+function loadPresets(){
+  try{ return JSON.parse(localStorage.getItem(PRESET_KEY) || '[]'); } catch(e){ return []; }
+}
+function savePresets(list){
+  try{ localStorage.setItem(PRESET_KEY, JSON.stringify(list)); } catch(e){}
+}
+function collectCurrentFields(){
+  return {
+    twitchTitle: document.getElementById('twitchTitle').value,
+    twitchGameId: twitch.gameId, twitchGameName: twitch.gameName,
+    twitchTags: document.getElementById('twitchTags').value,
+    twitchLang: document.getElementById('twitchLang').value,
+    ytTitle: document.getElementById('ytTitle').value,
+    ytDescription: document.getElementById('ytDescription').value,
+    ytTags: document.getElementById('ytTags').value,
+    ytCategoryId: document.getElementById('ytCategorySelect').value
+  };
+}
+function applyPresetFields(p){
+  document.getElementById('twitchTitle').value = p.twitchTitle || '';
+  twitch.gameId = p.twitchGameId || ''; twitch.gameName = p.twitchGameName || '';
+  document.getElementById('twitchGameSelected').textContent = p.twitchGameName || 'nincs';
+  document.getElementById('twitchTags').value = p.twitchTags || '';
+  document.getElementById('twitchLang').value = p.twitchLang || 'hu';
+  document.getElementById('ytTitle').value = p.ytTitle || '';
+  document.getElementById('ytDescription').value = p.ytDescription || '';
+  document.getElementById('ytTags').value = p.ytTags || '';
+  if(p.ytCategoryId) document.getElementById('ytCategorySelect').value = p.ytCategoryId;
+}
+function renderPresets(){
+  const list = loadPresets();
+  const el = document.getElementById('presetList');
+  el.innerHTML = list.length ? list.map((p,i)=>`
+    <div class="preset-row">
+      <span class="pname">${escapeHtml(p.name)}</span>
+      <button class="primary" data-act="send" data-i="${i}">Kitöltés + küldés</button>
+      <button class="ghost" data-act="load" data-i="${i}">Csak kitöltés</button>
+      <button class="ghost" data-act="del" data-i="${i}">Törlés</button>
+    </div>
+  `).join('') : '<div class="hint">Még nincs mentett sablon.</div>';
+  el.querySelectorAll('button').forEach(btn=>{
+    btn.onclick = async () => {
+      const list = loadPresets();
+      const p = list[parseInt(btn.dataset.i)];
+      if(!p) return;
+      if(btn.dataset.act === 'del'){
+        list.splice(parseInt(btn.dataset.i),1);
+        savePresets(list); renderPresets(); return;
+      }
+      applyPresetFields(p);
+      if(btn.dataset.act === 'send'){
+        setSendStatus('Küldés...');
+        const a = await sendTwitch();
+        const b = await sendYoutube();
+        setSendStatus((a?'Twitch ✔ ':'Twitch ✘ ') + (b?'YouTube ✔':'YouTube ✘'));
+      }
+    };
+  });
+}
+document.getElementById('savePresetBtn').onclick = () => {
+  const name = document.getElementById('presetName').value.trim();
+  if(!name) return;
+  const list = loadPresets();
+  list.push(Object.assign({name}, collectCurrentFields()));
+  savePresets(list);
+  document.getElementById('presetName').value = '';
+  renderPresets();
+};
+
+/* ================= OAUTH VISSZATÉRÉS ================= */
+loadFieldSettings();
+renderPresets();
+(function handleOAuthReturn(){
+  if(window.location.hash.includes('access_token')){
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const token = params.get('access_token');
+    if(token){
+      completeTwitchLogin(token);
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }
+})();
+</script>
+</body>
+</html>
