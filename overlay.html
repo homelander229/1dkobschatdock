@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<title>Chat Játékhub – Overlay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  html,body{
+    margin:0; padding:0;
+    background:transparent;
+    font-family:'JetBrains Mono', monospace;
+    color:#eceef5;
+  }
+  #wrap{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:14px;
+    padding:20px;
+    width:fit-content;
+  }
+  .status{
+    font-size:12px;
+    color:#cfd2e0;
+    background:rgba(13,14,20,0.55);
+    padding:5px 10px;
+    border-radius:8px;
+    position:fixed;
+    top:8px;
+    left:8px;
+  }
+  .banner{
+    font-weight:800;
+    font-size:20px;
+    padding:8px 18px;
+    border-radius:10px;
+    background:rgba(13,14,20,0.8);
+    border:2px solid #2a2d3d;
+    text-shadow:0 2px 6px rgba(0,0,0,0.6);
+  }
+  .banner.win{border-color:#4c8c4a; color:#8fe08c;}
+  .banner.lose{border-color:#ff2323; color:#ff8f8f;}
+
+  .card{
+    background:rgba(13,14,20,0.55);
+    border-radius:16px;
+    padding:20px 26px;
+    text-align:center;
+    box-shadow:0 8px 24px rgba(0,0,0,0.35);
+  }
+  .title{font-size:13px; text-transform:uppercase; letter-spacing:1.6px; opacity:0.75; margin-bottom:10px;}
+
+  .board{display:flex; flex-direction:column; gap:10px;}
+  .guess-block{display:flex; flex-direction:column; align-items:center; gap:3px;}
+  .row{display:grid; grid-template-columns:repeat(5,1fr); gap:9px;}
+  .tile{
+    width:60px; height:60px;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(26,28,40,0.85);
+    border:3px solid rgba(255,255,255,0.18);
+    border-radius:10px;
+    font-weight:800;
+    font-size:28px;
+    text-transform:uppercase;
+    box-shadow:0 4px 14px rgba(0,0,0,0.35);
+  }
+  .tile.correct{background:#4c8c4a; border-color:#4c8c4a;}
+  .tile.present{background:#b59f3b; border-color:#b59f3b;}
+  .tile.absent{background:rgba(51,54,74,0.9); border-color:rgba(255,255,255,0.1);}
+  .row-credit{font-size:12px; color:#cfd2e0; min-height:14px; text-shadow:0 1px 3px rgba(0,0,0,0.8);}
+
+  .masked{font-size:42px; font-weight:800; letter-spacing:6px;}
+  .hang-info{font-size:14px; margin-top:8px; opacity:0.85;}
+
+  .flag-emoji{font-size:96px; line-height:1;}
+  .anagram-word{font-size:40px; font-weight:800; letter-spacing:6px;}
+  .blur-emoji{font-size:96px; line-height:1; transition:filter .6s ease;}
+  .quiz-q{font-size:22px; max-width:520px;}
+
+  .lb-row{display:flex; justify-content:space-between; gap:26px; font-size:16px; padding:4px 0;}
+  .lb-name{font-weight:700;}
+  .lb-pts{color:#5ad1c4; font-weight:800;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div class="status" id="status">Csatlakozás...</div>
+  <div id="content"></div>
+</div>
+
+<script>
+const qp = new URLSearchParams(window.location.search);
+const ROOM = (qp.get('room')||'').trim().toUpperCase();
+const SYNC_BASE = 'https://ntfy.sh/';
+const TOPIC_PREFIX = 'chjatekhub-';
+
+const statusEl = document.getElementById('status');
+const contentEl = document.getElementById('content');
+
+let everConnected = false;
+function connectSync(){
+  if(!ROOM) return;
+  statusEl.style.display = '';
+  statusEl.textContent = 'Csatlakozás a szobához: ' + ROOM;
+  const url = SYNC_BASE + TOPIC_PREFIX + ROOM + '/sse?since=1h';
+  const es = new EventSource(url);
+  es.onopen = () => {
+    everConnected = true;
+    statusEl.textContent = 'Élő kapcsolat.';
+  };
+  es.onerror = () => {
+    // Az EventSource magától újrapróbálkozik a háttérben, ez itt csak a
+    // jelzőszöveg, nem szakítjuk meg a kapcsolatot. Ha még sosem sikerült
+    // csatlakozni, mutassuk a hibát; ha már működött, maradjunk csendben,
+    // hogy ne ugráljon a felirat az overlay tetején.
+    if(!everConnected){
+      statusEl.style.display = '';
+      statusEl.textContent = 'Kapcsolódási hiba, újrapróbálkozás...';
+    }
+  };
+  es.onmessage = (e) => {
+    try{
+      const outer = JSON.parse(e.data);
+      if(outer && outer.message){
+        everConnected = true;
+        const state = JSON.parse(outer.message);
+        render(state);
+      }
+    } catch(err){}
+  };
+}
+
+if(!ROOM){
+  statusEl.textContent = 'Hiányzó "room" paraméter a linkből.';
+} else {
+  connectSync();
+}
+
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function render(state){
+  let html = '';
+  if(state.banner){
+    html += `<div class="banner ${state.banner.type}" style="margin-bottom:14px;">${escapeHtml(state.banner.text)}</div>`;
+  }
+  const g = state.activeGame;
+  if(g === 'idle' || !g){
+    statusEl.style.display = 'none';
+    contentEl.innerHTML = html;
+    return;
+  }
+  statusEl.style.display = 'none';
+
+  if(g === 'wordle'){
+    const rows = state.wordle.rows || [];
+    let rowsHtml = '';
+    for(let r=0;r<state.wordle.total;r++){
+      const row = rows[r];
+      let tiles = '';
+      for(let c=0;c<5;c++){
+        if(row){
+          tiles += `<div class="tile ${row.result[c]}">${escapeHtml(row.letters[c])}</div>`;
+        } else {
+          tiles += `<div class="tile"></div>`;
+        }
+      }
+      rowsHtml += `<div class="guess-block"><div class="row">${tiles}</div><div class="row-credit">${row ? 'tippelte: '+escapeHtml(row.credit) : ''}</div></div>`;
+    }
+    html += `<div class="card"><div class="title">Szófejtő</div><div class="board">${rowsHtml}</div></div>`;
+  }
+  else if(g === 'hangman'){
+    html += `<div class="card">
+      <div class="title">Akasztófa</div>
+      <div class="masked">${escapeHtml(state.hangman.masked)}</div>
+      <div class="hang-info">Rossz tippek: ${state.hangman.wrong} / ${state.hangman.max}</div>
+    </div>`;
+  }
+  else if(g === 'flags'){
+    html += `<div class="card">
+      <div class="title">Melyik ország zászlaja ez?</div>
+      <div class="flag-emoji">${state.flags.emoji}</div>
+      ${state.flags.over ? `<div class="hang-info">${escapeHtml(state.flags.answer)}</div>` : ''}
+    </div>`;
+  }
+  else if(g === 'anagram'){
+    html += `<div class="card">
+      <div class="title">Betűkeverék</div>
+      <div class="anagram-word">${escapeHtml(state.anagram.scrambled)}</div>
+      ${state.anagram.over ? `<div class="hang-info">${escapeHtml(state.anagram.answer)}</div>` : ''}
+    </div>`;
+  }
+  else if(g === 'blur'){
+    html += `<div class="card">
+      <div class="title">Mit ábrázol a kép?</div>
+      <div class="blur-emoji" style="filter:blur(${state.blur.blurPx}px);">${state.blur.emoji}</div>
+      ${state.blur.over ? `<div class="hang-info">${escapeHtml(state.blur.answer)}</div>` : ''}
+    </div>`;
+  }
+  else if(g === 'quiz'){
+    html += `<div class="card">
+      <div class="title">Villámkvíz</div>
+      <div class="quiz-q">${escapeHtml(state.quiz.question)}</div>
+      ${state.quiz.over ? `<div class="hang-info">Helyes válasz: ${escapeHtml(state.quiz.answer)}</div>` : ''}
+    </div>`;
+  }
+  else if(g === 'leaderboard'){
+    const rows = (state.leaderboard.top||[]).map((s,i)=>`<div class="lb-row"><span class="lb-name">${i+1}. ${escapeHtml(s.name)}</span><span class="lb-pts">${s.points}</span></div>`).join('');
+    html += `<div class="card"><div class="title">Ranglista</div>${rows || '<div class="hang-info">Még nincs pontszám.</div>'}</div>`;
+  }
+
+  contentEl.innerHTML = html;
+}
+</script>
+</body>
+</html>

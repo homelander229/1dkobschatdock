@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Játékhub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Manrope:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0d0e14;
+    --panel:#161822;
+    --panel-2:#1e2130;
+    --line:#2a2d3d;
+    --ink:#eceef5;
+    --ink-dim:#9096ab;
+    --twitch:#9146ff;
+    --youtube:#ff2323;
+    --correct:#4c8c4a;
+    --present:#b59f3b;
+    --absent:#33364a;
+    --tile-empty:#1a1c28;
+    --c-wordle:#4c8c4a;
+    --c-hangman:#e0473a;
+    --c-flags:#3a8ee0;
+    --c-anagram:#b59f3b;
+    --c-blur:#9146ff;
+    --c-quiz:#ff9f1c;
+    --c-leader:#5ad1c4;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:radial-gradient(circle at 20% -10%, #201a33 0%, var(--bg) 45%);
+    color:var(--ink);
+    font-family:'Manrope', sans-serif;
+    min-height:100vh;
+    padding:28px 16px 60px;
+  }
+  h1{
+    font-family:'JetBrains Mono', monospace;
+    font-weight:800;
+    font-size:clamp(22px,4vw,32px);
+    letter-spacing:-0.5px;
+    margin:0 0 4px;
+  }
+  h1 span{color:var(--twitch);}
+  h1 span.yt{color:var(--youtube);}
+  .sub{color:var(--ink-dim); margin:0 0 24px; font-size:14px;}
+  .layout{
+    display:grid;
+    grid-template-columns:330px 1fr;
+    gap:20px;
+    max-width:1180px;
+    margin:0 auto;
+    align-items:start;
+  }
+  @media(max-width:860px){ .layout{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:16px;
+    margin-bottom:16px;
+  }
+  .panel h2{
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:1.4px;
+    color:var(--ink-dim);
+    margin:0 0 12px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:#555;flex:none;}
+  .dot.ok{background:#42d477; box-shadow:0 0 8px #42d47799;}
+  .dot.wait{background:#e0b23a;}
+  .dot.err{background:#e0473a;}
+
+  label{display:block; font-size:12.5px; color:var(--ink-dim); margin:9px 0 4px;}
+  input[type=text], input[type=password]{
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:8px 10px;
+    color:var(--ink);
+    font-size:13.5px;
+    font-family:'JetBrains Mono', monospace;
+  }
+  input:focus{outline:2px solid var(--twitch);}
+
+  button{
+    font-family:'Manrope', sans-serif;
+    font-weight:700;
+    font-size:12.5px;
+    border:none;
+    border-radius:8px;
+    padding:8px 13px;
+    cursor:pointer;
+    transition:transform .08s ease, filter .15s ease;
+  }
+  button:active{transform:scale(0.97);}
+  .btn-twitch{background:var(--twitch); color:white;}
+  .btn-youtube{background:var(--youtube); color:white;}
+  .btn-ghost{background:var(--panel-2); color:var(--ink); border:1px solid var(--line);}
+  .btn-row{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+  .status-line{font-size:11.5px; color:var(--ink-dim); margin-top:7px; min-height:14px;}
+  .hint{font-size:11.5px; color:var(--ink-dim); margin-top:6px; line-height:1.5;}
+
+  .tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;}
+  .tab{
+    padding:8px 12px;
+    border-radius:9px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--ink-dim);
+    font-family:'JetBrains Mono', monospace;
+    font-weight:700;
+    font-size:12.5px;
+    cursor:pointer;
+  }
+  .tab.active{color:#0d0e14;}
+  .tab[data-g=wordle].active{background:var(--c-wordle);}
+  .tab[data-g=hangman].active{background:var(--c-hangman);}
+  .tab[data-g=flags].active{background:var(--c-flags);}
+  .tab[data-g=anagram].active{background:var(--c-anagram);}
+  .tab[data-g=blur].active{background:var(--c-blur); color:white;}
+  .tab[data-g=quiz].active{background:var(--c-quiz);}
+  .tab[data-g=leaderboard].active{background:var(--c-leader);}
+  .tab[data-g=idle].active{background:#555; color:white;}
+
+  .active-panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:18px;
+    min-height:120px;
+  }
+  .active-panel h3{margin:0 0 8px; font-family:'JetBrains Mono', monospace;}
+  .secret-reveal{
+    font-family:'JetBrains Mono', monospace;
+    font-weight:800;
+    font-size:20px;
+    background:var(--panel-2);
+    border:1px dashed var(--line);
+    border-radius:8px;
+    padding:8px 12px;
+    display:inline-block;
+    margin:8px 0;
+    letter-spacing:2px;
+  }
+  .mini-info{font-size:13px; color:var(--ink-dim); margin:6px 0;}
+
+  .feed{
+    max-height:230px;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    font-size:13px;
+    margin-top:16px;
+  }
+  .feed::-webkit-scrollbar{width:6px;}
+  .feed::-webkit-scrollbar-thumb{background:var(--line); border-radius:4px;}
+  .msg{padding:5px 8px; border-radius:6px; background:var(--panel-2); word-break:break-word;}
+  .msg .who{font-weight:700; font-family:'JetBrains Mono', monospace; font-size:11px;}
+  .msg.twitch .who{color:var(--twitch);}
+  .msg.youtube .who{color:var(--youtube);}
+  .msg.guess{outline:1px solid #42d47788;}
+
+  .score-list{display:flex; flex-direction:column; gap:5px; font-size:13px;}
+  .score-row{display:flex; justify-content:space-between; background:var(--panel-2); padding:5px 9px; border-radius:6px;}
+  .score-row .pts{font-family:'JetBrains Mono', monospace; color:var(--c-leader); font-weight:700;}
+</style>
+</head>
+<body>
+
+  <h1>Chat <span>Játékhub</span><span class="yt">.</span></h1>
+  <p class="sub">Válaszd ki, melyik játék fusson — a nézők parancs nélkül, egyszerű szavakkal játszanak a chatben.</p>
+
+  <div class="layout">
+    <div>
+      <div class="panel">
+        <h2><span class="dot" id="twitchDot"></span> Twitch chat</h2>
+        <label for="twitchChannel">Csatorna neve</label>
+        <input id="twitchChannel" type="text" placeholder="pl. valaki_csatornaja" autocomplete="off">
+        <div class="btn-row">
+          <button class="btn-twitch" id="twitchConnectBtn">Csatlakozás</button>
+          <button class="btn-ghost" id="twitchDisconnectBtn">Bontás</button>
+        </div>
+        <div class="status-line" id="twitchStatus">Nincs csatlakoztatva.</div>
+        <p class="hint">A csatornanév automatikusan elmentődik ebben a böngészőben.</p>
+      </div>
+
+      <div class="panel">
+        <h2><span class="dot" id="ytDot"></span> YouTube chat</h2>
+        <label for="ytApiKey">YouTube Data API kulcs</label>
+        <input id="ytApiKey" type="password" placeholder="AIza..." autocomplete="off">
+        <label for="ytVideoId">Élő videó ID (vagy link)</label>
+        <input id="ytVideoId" type="text" placeholder="pl. dQw4w9WgXcQ" autocomplete="off">
+        <div class="btn-row">
+          <button class="btn-youtube" id="ytConnectBtn">Csatlakozás</button>
+          <button class="btn-ghost" id="ytDisconnectBtn">Bontás</button>
+        </div>
+        <div class="status-line" id="ytStatus">Nincs csatlakoztatva.</div>
+        <p class="hint">Az API kulcs és a videó ID is elmentődik ebben a böngészőben (csak a te géped, titkosítás nélkül) — közös gépen érdemes ezt figyelembe venni.</p>
+      </div>
+
+      <div class="panel">
+        <h2><span class="dot" id="mqttDot"></span> Overlay kapcsolat</h2>
+        <label for="roomCode">Szobakód</label>
+        <input id="roomCode" type="text" placeholder="szobakód">
+        <div class="btn-row">
+          <button class="btn-ghost" id="newRoomBtn">Új kód</button>
+        </div>
+        <label for="overlayLink" style="margin-top:12px;">Overlay link (add meg egyszer OBS-ben)</label>
+        <input id="overlayLink" type="text" readonly>
+        <div class="btn-row">
+          <button class="btn-ghost" id="copyOverlayBtn">Másolás</button>
+        </div>
+        <div class="status-line" id="mqttStatus">Csatlakozás a jelzőszerverhez...</div>
+        <p class="hint">Ez a link nem tartalmaz jelszót, csak egy szobakódot — ne oszd meg nyilvánosan, hogy más ne tudjon beleírni az overlay-be.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Ranglista</h2>
+        <div class="score-list" id="scoreList"></div>
+        <div class="btn-row">
+          <button class="btn-ghost" id="resetScoresBtn">Nullázás</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="tabs" id="tabs">
+        <div class="tab" data-g="idle">Elrejtés</div>
+        <div class="tab" data-g="wordle">Szófejtő</div>
+        <div class="tab" data-g="hangman">Akasztófa</div>
+        <div class="tab" data-g="flags">Országzászló</div>
+        <div class="tab" data-g="anagram">Betűkeverék</div>
+        <div class="tab" data-g="blur">Elmosódott kép</div>
+        <div class="tab" data-g="quiz">Villámkvíz</div>
+        <div class="tab" data-g="leaderboard">Ranglista (overlay)</div>
+      </div>
+
+      <div class="active-panel" id="activePanel">
+        <h3>Nincs aktív játék</h3>
+        <p class="mini-info">Válassz egy fület fent az induláshoz.</p>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <h2>Élő chat</h2>
+        <div class="feed" id="feed"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ================= HELPERS ================= */
+const HU_LETTER = "A-Za-zÁÉÍÓÖŐÚÜŰáéíóöőúüű";
+function extractTokens(text){
+  const splitRe = new RegExp(`[^${HU_LETTER}]+`);
+  return text.trim().split(splitRe).filter(Boolean);
+}
+function normalize(s){
+  return s.toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+}
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function shuffle(str){
+  let arr = str.split('');
+  let scrambled;
+  do{
+    for(let i=arr.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [arr[i],arr[j]]=[arr[j],arr[i]];
+    }
+    scrambled = arr.join('');
+  } while(scrambled === str && str.length>1);
+  return scrambled;
+}
+function pick(list){ return list[Math.floor(Math.random()*list.length)]; }
+
+/* ================= WORD BANKS ================= */
+const WORDLE_WORDS = ["ABLAK","BARNA","FEHÉR","PIROS","SÁRGA","KICSI","GYORS","LASSÚ","RÖVID","MAGAS",
+"VIDÁM","ÜGYES","HIDEG","MELEG","NAPOS","SÖTÉT","ERDEI","VÁROS","NÉPEK","BARÁT",
+"APUKA","TANÁR","FÜZET","AJTÓK","HÁZAK","UTCÁK","HIDAK","FOLYÓ","MEZŐK","MADÁR",
+"HALAK","LOVAK","KACSA","LIBÁK","JUHOK","MEDVE","RÓKÁK","PÓKOK","MÉHEK","LEPKE",
+"BOGÁR","CSIGA","KÍGYÓ","PANDA","MAJOM","ZEBRA","LEVES","KÖRTE","BANÁN","SZŐLŐ",
+"CUKOR","VÍZEK","BOROK","SÖRÖK","KUTYA","VIRÁG"];
+
+const HANGMAN_WORDS = ["BICIKLI","SZEMÜVEG","ESERNYŐ","REPÜLŐGÉP","AUTÓBUSZ","VILLAMOS","TELEFON",
+"MONITOR","ASZTAL","PÁRNA","TAKARÓ","NAPTÁR","CERUZA","OSZTÁLY","UDVAR","TENGER",
+"STRAND","CSOKOLÁDÉ","NARANCS","SZILVA","DINNYE","PARADICSOM","UBORKA","KRUMPLI",
+"HAGYMA","PAPRIKA","TOJÁS","CSIRKE","SERTÉS","VONAT","KÖNYVTÁR"];
+
+const ANAGRAM_POOL = WORDLE_WORDS.concat(["ASZTAL","PÁRNA","TAKARÓ","NAPTÁR","CERUZA","UDVAR","TENGER","STRAND","TOJÁS","CSIRKE","VONAT","PAPRIKA"]);
+
+const FLAGS = [
+  {emoji:"🇭🇺", accepted:["Magyarország","Magyar"]},
+  {emoji:"🇩🇪", accepted:["Németország"]},
+  {emoji:"🇫🇷", accepted:["Franciaország"]},
+  {emoji:"🇮🇹", accepted:["Olaszország"]},
+  {emoji:"🇪🇸", accepted:["Spanyolország"]},
+  {emoji:"🇬🇧", accepted:["Anglia","Egyesült Királyság","Nagy-Britannia"]},
+  {emoji:"🇺🇸", accepted:["Amerikai Egyesült Államok","USA","Amerika"]},
+  {emoji:"🇨🇦", accepted:["Kanada"]},
+  {emoji:"🇯🇵", accepted:["Japán"]},
+  {emoji:"🇨🇳", accepted:["Kína"]},
+  {emoji:"🇷🇺", accepted:["Oroszország"]},
+  {emoji:"🇧🇷", accepted:["Brazília"]},
+  {emoji:"🇦🇺", accepted:["Ausztrália"]},
+  {emoji:"🇬🇷", accepted:["Görögország"]},
+  {emoji:"🇹🇷", accepted:["Törökország"]},
+  {emoji:"🇵🇱", accepted:["Lengyelország"]},
+  {emoji:"🇦🇹", accepted:["Ausztria"]},
+  {emoji:"🇨🇭", accepted:["Svájc"]},
+  {emoji:"🇳🇱", accepted:["Hollandia"]},
+  {emoji:"🇧🇪", accepted:["Belgium"]},
+  {emoji:"🇵🇹", accepted:["Portugália"]},
+  {emoji:"🇸🇪", accepted:["Svédország"]},
+  {emoji:"🇳🇴", accepted:["Norvégia"]},
+  {emoji:"🇫🇮", accepted:["Finnország"]},
+  {emoji:"🇩🇰", accepted:["Dánia"]},
+  {emoji:"🇮🇪", accepted:["Írország"]},
+  {emoji:"🇨🇿", accepted:["Csehország"]},
+  {emoji:"🇸🇰", accepted:["Szlovákia"]},
+  {emoji:"🇷🇴", accepted:["Románia"]},
+  {emoji:"🇭🇷", accepted:["Horvátország"]},
+  {emoji:"🇷🇸", accepted:["Szerbia"]},
+  {emoji:"🇺🇦", accepted:["Ukrajna"]},
+  {emoji:"🇪🇬", accepted:["Egyiptom"]},
+  {emoji:"🇿🇦", accepted:["Dél-Afrika","Dél Afrika"]},
+  {emoji:"🇲🇽", accepted:["Mexikó"]},
+  {emoji:"🇦🇷", accepted:["Argentína"]},
+  {emoji:"🇮🇳", accepted:["India"]},
+  {emoji:"🇰🇷", accepted:["Dél-Korea","Dél Korea"]},
+  {emoji:"🇮🇱", accepted:["Izrael"]}
+];
+
+const QUIZ = [
+  {q:"Mi Franciaország fővárosa?", a:"Párizs"},
+  {q:"Hány kontinens van?", a:"7"},
+  {q:"Melyik a Naprendszer legnagyobb bolygója?", a:"Jupiter"},
+  {q:"Hány lába van egy póknak?", a:"8"},
+  {q:"Ki festette a Mona Lisát?", a:"Leonardo da Vinci"},
+  {q:"Mi a víz kémiai képlete?", a:"H2O"},
+  {q:"Hány nap van egy szökőévben?", a:"366"},
+  {q:"Melyik a szárazföld leggyorsabb futó állata?", a:"Gepárd"},
+  {q:"Mi Japán fővárosa?", a:"Tokió"},
+  {q:"Hány óra van egy napban?", a:"24"},
+  {q:"Melyik a legnagyobb óceán?", a:"Csendes-óceán"},
+  {q:"Mi Ausztrália fővárosa?", a:"Canberra"},
+  {q:"Hány húrja van egy hagyományos gitárnak?", a:"6"},
+  {q:"Melyik elem vegyjele az O?", a:"Oxigén"},
+  {q:"Ki írta a Rómeó és Júliát?", a:"Shakespeare"},
+  {q:"Mi a legnagyobb emlős a Földön?", a:"Kék bálna"},
+  {q:"Hány szín van a szivárványban?", a:"7"},
+  {q:"Melyik ország fővárosa Berlin?", a:"Németország"},
+  {q:"Hány perc van egy órában?", a:"60"},
+  {q:"Mi a Föld legmagasabb hegye?", a:"Mount Everest"},
+  {q:"Hány oldala van egy kockának?", a:"6"},
+  {q:"Mi Kína fővárosa?", a:"Peking"},
+  {q:"Melyik bolygót hívják Vörös bolygónak?", a:"Mars"},
+  {q:"Ki írta a Harry Potter könyveket?", a:"J.K. Rowling"},
+  {q:"Mi az emberi test legnagyobb szerve?", a:"Bőr"},
+  {q:"Hány foga van egy felnőtt embernek?", a:"32"}
+];
+
+const BLUR_ITEMS = [
+  {emoji:"🐶", accepted:["kutya"]},
+  {emoji:"🐱", accepted:["macska","cica"]},
+  {emoji:"🍕", accepted:["pizza"]},
+  {emoji:"✈️", accepted:["repülő","repülőgép"]},
+  {emoji:"🚗", accepted:["autó","kocsi"]},
+  {emoji:"🐬", accepted:["delfin"]},
+  {emoji:"🎸", accepted:["gitár"]},
+  {emoji:"🍔", accepted:["hamburger"]},
+  {emoji:"🌵", accepted:["kaktusz"]},
+  {emoji:"🦁", accepted:["oroszlán"]},
+  {emoji:"🐘", accepted:["elefánt"]},
+  {emoji:"⚽", accepted:["labda","futball"]},
+  {emoji:"🎃", accepted:["tök","sütőtök"]},
+  {emoji:"🌈", accepted:["szivárvány"]},
+  {emoji:"🚀", accepted:["rakéta"]},
+  {emoji:"🏠", accepted:["ház"]}
+];
+
+/* ================= SCORE ================= */
+const scores = new Map();
+function addScore(who){
+  scores.set(who, (scores.get(who)||0)+1);
+  renderScoreboard();
+}
+function topScores(n){
+  return [...scores.entries()].sort((a,b)=>b[1]-a[1]).slice(0,n).map(([name,points])=>({name,points}));
+}
+function renderScoreboard(){
+  const el = document.getElementById('scoreList');
+  const top = topScores(15);
+  el.innerHTML = top.length ? top.map(s=>`<div class="score-row"><span>${escapeHtml(s.name)}</span><span class="pts">${s.points}</span></div>`).join('') : '<div class="mini-info">Még nincs pontszám.</div>';
+}
+document.getElementById('resetScoresBtn').onclick = () => {
+  scores.clear();
+  renderScoreboard();
+  publishState();
+};
+
+/* ================= BANNER ================= */
+let banner = null;
+let bannerTimer = null;
+function setBanner(text, type){
+  banner = {text, type};
+  publishState();
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(()=>{ banner=null; publishState(); }, 6000);
+}
+
+/* ================= GAME STATE ================= */
+let activeGame = 'idle';
+
+let wordleState = { secret:null, rows:[], over:false };
+function wordleStart(){
+  wordleState = { secret: pick(WORDLE_WORDS), rows:[], over:false };
+  addFeedSystem('Új Szófejtő kör: 5 betűs szót kell kitalálni.');
+}
+function wordleHandleMessage(text, who){
+  if(wordleState.over) return;
+  const validRe = new RegExp(`^[${HU_LETTER}]{5}$`);
+  const token = extractTokens(text).find(t=>validRe.test(t));
+  if(!token) return;
+  const guess = token.toUpperCase();
+  const secretArr = wordleState.secret.split('');
+  const guessArr = guess.split('');
+  const result = Array(5).fill('absent');
+  const counts = {};
+  secretArr.forEach(l=>counts[l]=(counts[l]||0)+1);
+  for(let i=0;i<5;i++){ if(guessArr[i]===secretArr[i]){ result[i]='correct'; counts[guessArr[i]]--; } }
+  for(let i=0;i<5;i++){ if(result[i]==='correct') continue; const l=guessArr[i]; if(counts[l]>0){ result[i]='present'; counts[l]--; } }
+  wordleState.rows.push({letters:guessArr, result, credit:who});
+  const won = guess === wordleState.secret;
+  if(won || wordleState.rows.length>=5){
+    wordleState.over = true;
+    if(won){ addScore(who); setBanner(`🎉 ${who} eltalálta: ${wordleState.secret}`, 'win'); }
+    else setBanner(`A szó ez volt: ${wordleState.secret}`, 'lose');
+  }
+}
+
+let hangmanState = { word:null, guessed:new Set(), wrong:0, max:6, over:false };
+function hangmanStart(){
+  hangmanState = { word: pick(HANGMAN_WORDS), guessed:new Set(), wrong:0, max:6, over:false };
+  addFeedSystem('Új Akasztófa kör indult.');
+}
+function hangmanMasked(){
+  return hangmanState.word.split('').map(l=>hangmanState.guessed.has(l)?l:'_').join(' ');
+}
+function hangmanHandleMessage(text, who){
+  if(hangmanState.over) return;
+  const tokens = extractTokens(text);
+  for(const t of tokens){
+    if(hangmanState.over) break;
+    const up = t.toUpperCase();
+    if(up.length === hangmanState.word.length && up === hangmanState.word){
+      hangmanState.word.split('').forEach(l=>hangmanState.guessed.add(l));
+      hangmanState.over = true;
+      addScore(who);
+      setBanner(`🎉 ${who} kitalálta: ${hangmanState.word}`, 'win');
+      return;
+    }
+    if(up.length === 1){
+      if(hangmanState.guessed.has(up)) continue;
+      hangmanState.guessed.add(up);
+      if(!hangmanState.word.includes(up)){
+        hangmanState.wrong++;
+        if(hangmanState.wrong >= hangmanState.max){
+          hangmanState.over = true;
+          setBanner(`A szó ez volt: ${hangmanState.word}`, 'lose');
+          return;
+        }
+      } else {
+        const allRevealed = hangmanState.word.split('').every(l=>hangmanState.guessed.has(l));
+        if(allRevealed){
+          hangmanState.over = true;
+          addScore(who);
+          setBanner(`🎉 ${who} kitalálta: ${hangmanState.word}`, 'win');
+          return;
+        }
+      }
+    }
+  }
+}
+
+let flagsState = { entry:null, over:false };
+function flagsStart(){
+  flagsState = { entry: pick(FLAGS), over:false };
+  addFeedSystem('Új Országzászló kör indult.');
+}
+function flagsHandleMessage(text, who){
+  if(flagsState.over) return;
+  const norm = normalize(text);
+  if(flagsState.entry.accepted.some(a=>normalize(a)===norm)){
+    flagsState.over = true;
+    addScore(who);
+    setBanner(`🎉 ${who} eltalálta: ${flagsState.entry.accepted[0]}`, 'win');
+  }
+}
+
+let anagramState = { original:null, scrambled:null, over:false };
+function anagramStart(){
+  const word = pick(ANAGRAM_POOL);
+  anagramState = { original: word, scrambled: shuffle(word), over:false };
+  addFeedSystem('Új Betűkeverék kör indult.');
+}
+function anagramHandleMessage(text, who){
+  if(anagramState.over) return;
+  const validRe = new RegExp(`^[${HU_LETTER}]{${anagramState.original.length}}$`);
+  const token = extractTokens(text).find(t=>validRe.test(t));
+  if(!token) return;
+  if(token.toUpperCase() === anagramState.original){
+    anagramState.over = true;
+    addScore(who);
+    setBanner(`🎉 ${who} kitalálta: ${anagramState.original}`, 'win');
+  }
+}
+
+let blurState = { item:null, blurPx:40, over:false, timer:null };
+function blurStart(){
+  clearInterval(blurState.timer);
+  const item = pick(BLUR_ITEMS);
+  blurState = { item, blurPx:40, over:false, timer:null };
+  const stages = [40,30,20,12,6,0];
+  let i=0;
+  blurState.timer = setInterval(()=>{
+    i++;
+    if(i>=stages.length){ clearInterval(blurState.timer); return; }
+    if(blurState.over){ clearInterval(blurState.timer); return; }
+    blurState.blurPx = stages[i];
+    publishState();
+  }, 4000);
+  addFeedSystem('Új Elmosódott kép kör indult.');
+}
+function blurHandleMessage(text, who){
+  if(blurState.over) return;
+  const norm = normalize(text);
+  if(blurState.item.accepted.some(a=>normalize(a)===norm)){
+    blurState.over = true;
+    clearInterval(blurState.timer);
+    blurState.blurPx = 0;
+    addScore(who);
+    setBanner(`🎉 ${who} eltalálta: ${blurState.item.accepted[0]}`, 'win');
+  }
+}
+
+let quizState = { item:null, over:false };
+function quizStart(){
+  quizState = { item: pick(QUIZ), over:false };
+  addFeedSystem('Új Villámkvíz kérdés.');
+}
+function quizHandleMessage(text, who){
+  if(quizState.over) return;
+  const norm = normalize(text);
+  if(normalize(quizState.item.a) === norm){
+    quizState.over = true;
+    addScore(who);
+    setBanner(`🎉 ${who} válaszolt helyesen: ${quizState.item.a}`, 'win');
+  }
+}
+
+/* ================= ROUTING ================= */
+function handleIncomingMessage(platform, user, text){
+  addFeedMsg(platform, user, text);
+  const who = user + (platform==='twitch' ? ' (Twitch)' : ' (YouTube)');
+  switch(activeGame){
+    case 'wordle': wordleHandleMessage(text, who); break;
+    case 'hangman': hangmanHandleMessage(text, who); break;
+    case 'flags': flagsHandleMessage(text, who); break;
+    case 'anagram': anagramHandleMessage(text, who); break;
+    case 'blur': blurHandleMessage(text, who); break;
+    case 'quiz': quizHandleMessage(text, who); break;
+  }
+  renderActivePanel();
+  publishState();
+}
+
+function switchGame(id){
+  activeGame = id;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.g===id));
+  if(id==='wordle') wordleStart();
+  else if(id==='hangman') hangmanStart();
+  else if(id==='flags') flagsStart();
+  else if(id==='anagram') anagramStart();
+  else if(id==='blur') blurStart();
+  else if(id==='quiz') quizStart();
+  renderActivePanel();
+  publishState(true);
+}
+document.querySelectorAll('.tab').forEach(t=>{
+  t.onclick = () => switchGame(t.dataset.g);
+});
+
+function newRound(){ switchGame(activeGame); }
+
+function renderActivePanel(){
+  const el = document.getElementById('activePanel');
+  let html = '';
+  if(activeGame==='idle'){
+    html = `<h3>Overlay elrejtve</h3><p class="mini-info">Válassz egy játékot fent az induláshoz.</p>`;
+  } else if(activeGame==='wordle'){
+    html = `<h3 style="color:var(--c-wordle)">Szófejtő</h3>
+      <p class="mini-info">A titkos szó (csak neked):</p>
+      <div class="secret-reveal">${wordleState.secret}</div>
+      <p class="mini-info">${wordleState.rows.length} / 5 tipp leadva.</p>
+      <div class="btn-row"><button class="btn-ghost" onclick="newRound()">Új kör</button></div>`;
+  } else if(activeGame==='hangman'){
+    html = `<h3 style="color:var(--c-hangman)">Akasztófa</h3>
+      <div class="secret-reveal">${hangmanMasked()}</div>
+      <p class="mini-info">Rossz tippek: ${hangmanState.wrong} / ${hangmanState.max}</p>
+      <p class="mini-info">Teljes szó (csak neked): <b>${hangmanState.word}</b></p>
+      <div class="btn-row"><button class="btn-ghost" onclick="newRound()">Új kör</button></div>`;
+  } else if(activeGame==='flags'){
+    html = `<h3 style="color:var(--c-flags)">Országzászló</h3>
+      <div class="secret-reveal">${flagsState.entry.emoji}</div>
+      <p class="mini-info">Elfogadott válasz (csak neked): <b>${flagsState.entry.accepted[0]}</b></p>
+      <div class="btn-row"><button class="btn-ghost" onclick="newRound()">Új kör</button></div>`;
+  } else if(activeGame==='anagram'){
+    html = `<h3 style="color:var(--c-anagram)">Betűkeverék</h3>
+      <div class="secret-reveal">${anagramState.scrambled}</div>
+      <p class="mini-info">Eredeti szó (csak neked): <b>${anagramState.original}</b></p>
+      <div class="btn-row"><button class="btn-ghost" onclick="newRound()">Új kör</button></div>`;
+  } else if(activeGame==='blur'){
+    html = `<h3 style="color:var(--c-blur)">Elmosódott kép</h3>
+      <div class="secret-reveal" style="filter:blur(${blurState.blurPx}px); font-size:44px;">${blurState.item.emoji}</div>
+      <p class="mini-info">Elfogadott válasz (csak neked): <b>${blurState.item.accepted[0]}</b></p>
+      <div class="btn-row"><button class="btn-ghost" onclick="newRound()">Új kör</button></div>`;
+  } else if(activeGame==='quiz'){
+    html = `<h3 style="color:var(--c-quiz)">Villámkvíz</h3>
+      <p style="font-size:16px;">${escapeHtml(quizState.item.q)}</p>
+      <p class="mini-info">Elfogadott válasz (csak neked): <b>${quizState.item.a}</b></p>
+      <div class="btn-row"><button class="btn-ghost" onclick="newRound()">Következő kérdés</button></div>`;
+  } else if(activeGame==='leaderboard'){
+    html = `<h3 style="color:var(--c-leader)">Ranglista overlay nézet</h3>
+      <p class="mini-info">A jobb oldali ranglista most az overlay-en is látszik.</p>`;
+  }
+  el.innerHTML = html;
+}
+
+/* ================= FEED ================= */
+const feedEl = document.getElementById('feed');
+function addFeedMsg(platform, user, text){
+  const div = document.createElement('div');
+  div.className = 'msg ' + platform;
+  div.innerHTML = `<span class="who">${escapeHtml(user)}</span> ${escapeHtml(text)}`;
+  feedEl.appendChild(div);
+  feedEl.scrollTop = feedEl.scrollHeight;
+  while(feedEl.children.length > 200) feedEl.removeChild(feedEl.firstChild);
+}
+function addFeedSystem(text){
+  const div = document.createElement('div');
+  div.className = 'msg';
+  div.style.opacity = '0.7';
+  div.textContent = text;
+  feedEl.appendChild(div);
+  feedEl.scrollTop = feedEl.scrollHeight;
+}
+
+/* ================= MENTETT ADATOK (böngésző) ================= */
+const SAVE_KEY = 'chatjatekhub_settings';
+function saveSettings(){
+  try{
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      twitchChannel: document.getElementById('twitchChannel').value,
+      ytApiKey: document.getElementById('ytApiKey').value,
+      ytVideoId: document.getElementById('ytVideoId').value,
+      roomCode: roomCode
+    }));
+  } catch(e){ /* localStorage nem elérhető, csendben kihagyjuk */ }
+}
+function loadSettings(){
+  try{
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  } catch(e){ return null; }
+}
+['twitchChannel','ytApiKey','ytVideoId'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', saveSettings);
+});
+
+/* ================= TWITCH ================= */
+let twitchSocket = null;
+function setTwitchStatus(text, cls){
+  document.getElementById('twitchStatus').textContent = text;
+  document.getElementById('twitchDot').className = 'dot ' + (cls||'');
+}
+function connectTwitch(){
+  const channel = document.getElementById('twitchChannel').value.trim().toLowerCase().replace(/^#/,'');
+  if(!channel){ setTwitchStatus('Adj meg egy csatornanevet.', 'err'); return; }
+  if(twitchSocket) twitchSocket.close();
+  setTwitchStatus('Csatlakozás...', 'wait');
+  const nick = 'justinfan' + Math.floor(10000 + Math.random()*89999);
+  twitchSocket = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
+  twitchSocket.onopen = () => {
+    twitchSocket.send('CAP REQ :twitch.tv/tags twitch.tv/commands');
+    twitchSocket.send('PASS SCHMOOPIIE');
+    twitchSocket.send('NICK ' + nick);
+    twitchSocket.send('JOIN #' + channel);
+  };
+  twitchSocket.onmessage = (event) => {
+    const lines = event.data.split('\r\n').filter(Boolean);
+    for(const line of lines){
+      if(line.startsWith('PING')){ twitchSocket.send('PONG :tmi.twitch.tv'); continue; }
+      if(line.includes('PRIVMSG')){
+        const userMatch = line.match(/display-name=([^;]*)/);
+        const msgMatch = line.match(/PRIVMSG #\w+ :(.*)$/);
+        const fallbackUser = line.match(/:(\w+)!/);
+        const user = (userMatch && userMatch[1]) ? userMatch[1] : (fallbackUser ? fallbackUser[1] : 'ismeretlen');
+        const msg = msgMatch ? msgMatch[1] : '';
+        if(msg) handleIncomingMessage('twitch', user, msg);
+      } else if(line.includes('001')){
+        setTwitchStatus('Csatlakozva: #' + channel, 'ok');
+      }
+    }
+  };
+  twitchSocket.onerror = () => setTwitchStatus('Hiba történt a kapcsolatban.', 'err');
+  twitchSocket.onclose = () => setTwitchStatus('Kapcsolat bontva.', '');
+}
+function disconnectTwitch(){
+  if(twitchSocket){ twitchSocket.close(); twitchSocket = null; }
+  setTwitchStatus('Nincs csatlakoztatva.', '');
+}
+document.getElementById('twitchConnectBtn').onclick = connectTwitch;
+document.getElementById('twitchDisconnectBtn').onclick = disconnectTwitch;
+
+/* ================= YOUTUBE ================= */
+let ytPollTimer = null, ytNextPageToken = null, ytLiveChatId = null;
+function setYtStatus(text, cls){
+  document.getElementById('ytStatus').textContent = text;
+  document.getElementById('ytDot').className = 'dot ' + (cls||'');
+}
+function extractVideoId(input){
+  input = input.trim();
+  const m = input.match(/(?:v=|youtu\.be\/|live\/)([a-zA-Z0-9_-]{6,})/);
+  return m ? m[1] : input;
+}
+async function connectYoutube(){
+  const apiKey = document.getElementById('ytApiKey').value.trim();
+  const videoId = extractVideoId(document.getElementById('ytVideoId').value);
+  if(!apiKey || !videoId){ setYtStatus('Add meg az API kulcsot és a videó ID-t.', 'err'); return; }
+  setYtStatus('Csatlakozás...', 'wait');
+  try{
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${encodeURIComponent(videoId)}&key=${encodeURIComponent(apiKey)}`);
+    const data = await res.json();
+    if(data.error){ setYtStatus('API hiba: ' + data.error.message, 'err'); return; }
+    const item = data.items && data.items[0];
+    const liveChatId = item && item.liveStreamingDetails && item.liveStreamingDetails.activeLiveChatId;
+    if(!liveChatId){ setYtStatus('Nincs aktív élő chat ehhez a videóhoz.', 'err'); return; }
+    ytLiveChatId = liveChatId;
+    ytNextPageToken = null;
+    setYtStatus('Csatlakozva.', 'ok');
+    pollYoutube(apiKey);
+  } catch(e){ setYtStatus('Nem sikerült csatlakozni.', 'err'); }
+}
+async function pollYoutube(apiKey){
+  if(!ytLiveChatId) return;
+  try{
+    let url = `https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${encodeURIComponent(ytLiveChatId)}&part=snippet,authorDetails&key=${encodeURIComponent(apiKey)}`;
+    if(ytNextPageToken) url += `&pageToken=${ytNextPageToken}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if(data.error){ setYtStatus('API hiba: ' + data.error.message, 'err'); return; }
+    ytNextPageToken = data.nextPageToken;
+    (data.items||[]).forEach(item=>{
+      const user = item.authorDetails ? item.authorDetails.displayName : 'ismeretlen';
+      const text = item.snippet && item.snippet.displayMessage ? item.snippet.displayMessage : '';
+      if(text) handleIncomingMessage('youtube', user, text);
+    });
+    const interval = Math.max(data.pollingIntervalMillis || 8000, 4000);
+    ytPollTimer = setTimeout(()=>pollYoutube(apiKey), interval);
+  } catch(e){ ytPollTimer = setTimeout(()=>pollYoutube(apiKey), 10000); }
+}
+function disconnectYoutube(){
+  if(ytPollTimer) clearTimeout(ytPollTimer);
+  ytPollTimer = null; ytLiveChatId = null;
+  setYtStatus('Nincs csatlakoztatva.', '');
+}
+document.getElementById('ytConnectBtn').onclick = connectYoutube;
+document.getElementById('ytDisconnectBtn').onclick = disconnectYoutube;
+
+/* ================= OVERLAY SZINKRON (sima HTTPS, 443-as port) ================= */
+const SYNC_BASE = 'https://ntfy.sh/';
+const TOPIC_PREFIX = 'chjatekhub-';
+let roomCode = null;
+let syncFailCount = 0;
+
+function setMqttStatus(text, cls){
+  document.getElementById('mqttStatus').textContent = text;
+  document.getElementById('mqttDot').className = 'dot ' + (cls||'');
+}
+function randomRoom(){
+  return Math.random().toString(36).substring(2,8).toUpperCase();
+}
+function setRoom(code){
+  roomCode = code;
+  document.getElementById('roomCode').value = code;
+  const base = new URL('overlay.html', window.location.href).href;
+  document.getElementById('overlayLink').value = base + '?room=' + encodeURIComponent(code);
+}
+async function sendStateNow(){
+  if(!roomCode) return;
+  const state = {
+    activeGame,
+    banner,
+    wordle: { rows: wordleState.rows, total: 5 },
+    hangman: { masked: hangmanState.word ? hangmanMasked() : '', wrong: hangmanState.wrong, max: hangmanState.max, over: hangmanState.over, word: hangmanState.over ? hangmanState.word : null },
+    flags: { emoji: flagsState.entry ? flagsState.entry.emoji : '', over: flagsState.over, answer: flagsState.over ? flagsState.entry.accepted[0] : null },
+    anagram: { scrambled: anagramState.scrambled, over: anagramState.over, answer: anagramState.over ? anagramState.original : null },
+    blur: { emoji: blurState.item ? blurState.item.emoji : '', blurPx: blurState.blurPx, over: blurState.over, answer: blurState.over ? blurState.item.accepted[0] : null },
+    quiz: { question: quizState.item ? quizState.item.q : '', over: quizState.over, answer: quizState.over ? quizState.item.a : null },
+    leaderboard: { top: topScores(8) }
+  };
+  try{
+    const res = await fetch(SYNC_BASE + TOPIC_PREFIX + roomCode, { method:'POST', body: JSON.stringify(state) });
+    if(res.ok){ syncFailCount = 0; setMqttStatus('Overlay csatorna kész.', 'ok'); }
+    else { syncFailCount++; setMqttStatus('A szinkron szerver hibát adott vissza.', 'err'); }
+  } catch(e){
+    syncFailCount++;
+    setMqttStatus(syncFailCount > 2 ? 'Nem sikerül elérni a szinkron szervert. Ellenőrizd az internetkapcsolatot.' : 'Átmeneti hiba, újrapróbálom...', 'err');
+  }
+}
+/* Legfeljebb 2 másodpercenként küld ki állapotot, hogy forgalmas chatnél se
+   fussunk bele a szinkron szerver limitjébe. A gombra kattintós/játékváltós
+   eseményeknél (immediate=true) azonnal küld, hogy ne érezzen késést a host. */
+let publishPending = false;
+let lastSentAt = 0;
+const PUBLISH_MIN_GAP_MS = 2000;
+function publishState(immediate){
+  const now = Date.now();
+  const elapsed = now - lastSentAt;
+  if(immediate || elapsed >= PUBLISH_MIN_GAP_MS){
+    lastSentAt = now;
+    publishPending = false;
+    sendStateNow();
+  } else if(!publishPending){
+    publishPending = true;
+    setTimeout(()=>{
+      publishPending = false;
+      lastSentAt = Date.now();
+      sendStateNow();
+    }, PUBLISH_MIN_GAP_MS - elapsed);
+  }
+}
+document.getElementById('mqttStatus').style.cursor = 'pointer';
+document.getElementById('mqttStatus').title = 'Kattints az újrapróbálkozáshoz';
+document.getElementById('mqttStatus').addEventListener('click', ()=> publishState(true));
+document.getElementById('newRoomBtn').onclick = () => { setRoom(randomRoom()); saveSettings(); publishState(true); };
+document.getElementById('roomCode').addEventListener('change', (e) => { setRoom(e.target.value.trim().toUpperCase()); saveSettings(); publishState(true); });
+document.getElementById('copyOverlayBtn').onclick = () => {
+  const val = document.getElementById('overlayLink').value;
+  if(!val) return;
+  navigator.clipboard.writeText(val).then(()=> addFeedSystem('Overlay link a vágólapra másolva.'));
+};
+
+/* ================= INIT ================= */
+const saved = loadSettings();
+if(saved){
+  if(saved.twitchChannel) document.getElementById('twitchChannel').value = saved.twitchChannel;
+  if(saved.ytApiKey) document.getElementById('ytApiKey').value = saved.ytApiKey;
+  if(saved.ytVideoId) document.getElementById('ytVideoId').value = saved.ytVideoId;
+}
+setRoom((saved && saved.roomCode) ? saved.roomCode : randomRoom());
+publishState(true);
+renderScoreboard();
+renderActivePanel();
+</script>
+</body>
+</html>
