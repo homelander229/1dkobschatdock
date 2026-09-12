@@ -235,6 +235,12 @@
     </div>
 
     <div>
+      <div class="btn-row" style="margin-bottom:12px; align-items:center;">
+        <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer; user-select:none;">
+          <input type="checkbox" id="autoNewRoundToggle" style="width:auto;">
+          Automatikus új kör indítása (ha vége egy körnek, magától újraindul)
+        </label>
+      </div>
       <div class="tabs" id="tabs">
         <div class="tab" data-g="idle">Elrejtés</div>
         <div class="tab" data-g="wordle">Szófejtő</div>
@@ -413,11 +419,18 @@ document.getElementById('resetScoresBtn').onclick = () => {
 /* ================= BANNER ================= */
 let banner = null;
 let bannerTimer = null;
+const ROUND_BASED_GAMES = ['wordle','hangman','flags','anagram','blur','quiz'];
 function setBanner(text, type){
   banner = {text, type};
   publishState();
   clearTimeout(bannerTimer);
-  bannerTimer = setTimeout(()=>{ banner=null; publishState(); }, 6000);
+  bannerTimer = setTimeout(()=>{
+    banner=null;
+    publishState();
+    if(document.getElementById('autoNewRoundToggle').checked && ROUND_BASED_GAMES.includes(activeGame)){
+      newRound();
+    }
+  }, 6000);
 }
 
 /* ================= GAME STATE ================= */
@@ -675,7 +688,8 @@ function saveSettings(){
       twitchChannel: document.getElementById('twitchChannel').value,
       ytApiKey: document.getElementById('ytApiKey').value,
       ytVideoId: document.getElementById('ytVideoId').value,
-      roomCode: roomCode
+      roomCode: roomCode,
+      autoNewRound: document.getElementById('autoNewRoundToggle').checked
     }));
   } catch(e){ /* localStorage nem elérhető, csendben kihagyjuk */ }
 }
@@ -689,6 +703,7 @@ function loadSettings(){
 ['twitchChannel','ytApiKey','ytVideoId'].forEach(id=>{
   document.getElementById(id).addEventListener('input', saveSettings);
 });
+document.getElementById('autoNewRoundToggle').addEventListener('change', saveSettings);
 
 /* ================= TWITCH ================= */
 let twitchSocket = null;
@@ -870,6 +885,7 @@ if(saved){
   if(saved.twitchChannel) document.getElementById('twitchChannel').value = saved.twitchChannel;
   if(saved.ytApiKey) document.getElementById('ytApiKey').value = saved.ytApiKey;
   if(saved.ytVideoId) document.getElementById('ytVideoId').value = saved.ytVideoId;
+  if(typeof saved.autoNewRound === 'boolean') document.getElementById('autoNewRoundToggle').checked = saved.autoNewRound;
 }
 setRoom((saved && saved.roomCode) ? saved.roomCode : randomRoom());
 publishState(true);
